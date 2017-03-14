@@ -15,6 +15,10 @@ is a template writeup for this project you can use as a guide and a starting poi
 
 This file is the writeup.
 
+The [demo_pipeline](./vdat-pipeline.py) function is written to produce all of the sample images
+in this write up. It calls the same sequence of functions as our video procesing pipeline,
+but exists separately to help generate examples of each step of our process.
+
 ###Histogram of Oriented Gradients (HOG)
 
 ####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
@@ -59,7 +63,42 @@ on predictions made by the classifier to decide whether it needed additional tun
 
 ####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
+The [find_cars](./lessons_functions.py) function performs a sliding window search on an image. It uses
+and overlapping grid approach to partition the larger image into smaller overlapping images which can be
+fed to the classifier to decide if a vehicle is present. For each sub-partition of the grid where a vehicle
+is found, the bounding box corners of the partition are stored.
 
+The grid itself covers only the bottom portion of the image where vehicles are likely to appear. The image
+below shows an example of how the overlapping grid appears.
+
+![search_grid][search_grid]
+
+####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+
+Below are some sample images and frames visualizing how the pipeline identifies bounding boxes around
+the vehicles discovered in the image.
+
+![search_sequence1][search_sequence1]
+
+---
+
+### Video Implementation
+
+####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding 
+
+TODO
+
+####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+
+TODO
+
+---
+
+###Discussion
+
+####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+
+TODO
 
 [//]: # (Image References)
 
@@ -69,3 +108,5 @@ on predictions made by the classifier to decide whether it needed additional tun
 [car2_sequence]: ./output_folder/car-1-hog-sequence.jpg
 [notcar1_sequence]: ./output_folder/notcar-0-hog-sequence.jpg
 [notcar2_sequence]: ./output_folder/notcar-1-hog-sequence.jpg
+[search_grid]: ./output_folder/search_grid.jpg
+[search_sequence1]: ./output_folder/search_sequence.jpg

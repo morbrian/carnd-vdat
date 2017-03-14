@@ -6,7 +6,7 @@ import os
 import os.path as path
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-
+from scipy.ndimage.measurements import label
 
 def save_hog_sequence(output_image_name, title, image, hog_vis, file_features):
     """
@@ -67,15 +67,17 @@ def get_hog_features(img, orient, pix_per_cell, cell_per_block,
         return features
 
 
-def convert_color(img, conv='RGB2YCrCb'):
-    if conv == 'RGB2YCrCb':
-        return cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
-    if conv == 'BGR2YCrCb':
-        return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-    if conv == 'RGB2LUV':
-        return cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
-    if conv == 'RGB2YUV':
-        return cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+def convert_color(image, conv='YCrCb'):
+    if conv == 'HSV':
+        return cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    elif conv == 'LUV':
+        return cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
+    elif conv == 'HLS':
+        return cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+    elif conv == 'YUV':
+        return cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+    elif conv == 'YCrCb':
+        return cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
 
 
 # Define a function to compute binned color features
@@ -116,16 +118,7 @@ def extract_features(image_file, color_space='RGB', spatial_size=(32, 32),
     image = mpimg.imread(image_file)
     # apply color conversion if other than 'RGB'
     if color_space != 'RGB':
-        if color_space == 'HSV':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-        elif color_space == 'LUV':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
-        elif color_space == 'HLS':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-        elif color_space == 'YUV':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
-        elif color_space == 'YCrCb':
-            feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+        feature_image = convert_color(image, color_space)
     else:
         feature_image = np.copy(image)
 
@@ -257,12 +250,9 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
 
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.5,
+def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.2,
               orient=9, pix_per_cell=8, cell_per_block=2,
-              spatial_size=(32, 32), hist_bins=32):
-
-    draw_img = np.copy(img)
-    # img = img.astype(np.float32)/255
+              spatial_size=(32, 32), hist_bins=32, grid=False):
 
     img_tosearch = img[ystart:ystop, :, :]
     ctrans_tosearch = cv2.cvtColor(img_tosearch, cv2.COLOR_RGB2LUV)
@@ -291,6 +281,7 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.5,
     hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
+    bboxes = []
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb*cells_per_step
@@ -300,7 +291,6 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.5,
             hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel()
             hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
-            print("hfstack:{}".format(hog_features.shape))
 
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
@@ -316,14 +306,75 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.5,
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
             test_prediction = svc.predict(test_features)
 
-            if test_prediction == 1:
+            if test_prediction == 1 or grid is True:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
-                cv2.rectangle(draw_img, (xbox_left, ytop_draw+ystart), (xbox_left+win_draw, ytop_draw+win_draw+ystart),
-                              (0, 0, 255), 6)
+                bboxes.append(((xbox_left, ytop_draw+ystart),
+                              (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
 
-    return draw_img
+    return bboxes
 
 
+def add_heat(heatmap, bbox_list):
+    # Iterate through list of bboxes
+    for box in bbox_list:
+        # Add += 1 for all pixels inside each bbox
+        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+
+    # Return updated heatmap
+    return heatmap  # Iterate through list of bboxes
+
+
+def apply_threshold(heatmap, threshold):
+    # Zero out pixels below the threshold
+    heatmap[heatmap <= threshold] = 0
+    # Return thresholded map
+    return heatmap
+
+
+def nonoverlapping_bboxes(labels):
+    bboxes = []
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bboxes.append(((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy))))
+
+    # Return the image
+    return bboxes
+
+
+def draw_bboxes(img, bboxes, color=(0, 0, 255), thick=4):
+    # Iterate through all detected cars
+    for bbox in bboxes:
+        # Draw the box on the image
+        cv2.rectangle(img, bbox[0], bbox[1], color, thick)
+    # Return the image
+    return img
+
+
+def produce_heatmap(image, raw_bboxes, threshold=1):
+    heat = np.zeros_like(image[:, :, 0]).astype(np.float)
+    # Add heat to each box in box list
+    heat = add_heat(heat, raw_bboxes)
+
+    # Apply threshold to help remove false positives
+    heat = apply_threshold(heat, threshold)
+
+    # Visualize the heatmap when displaying
+    heatmap = np.clip(heat, 0, 255)
+
+    return heatmap
+
+
+def fuse_bboxes(heatmap):
+    labels = label(heatmap)
+    fused_bboxes = nonoverlapping_bboxes(labels)
+    return fused_bboxes
 
