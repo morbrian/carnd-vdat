@@ -36,14 +36,14 @@ def prepare_classifier(cars, notcars, color_space='LUV', orient=9, pix_per_cell=
                        cell_per_block=2, hog_channel='ALL', output_folder=None, sample_count=5):
 
     t = time.time()
-    car_features = lf.extract_features(cars, color_space=color_space, orient=orient,
-                                       pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                       hog_channel=hog_channel,
-                                       tag="car", vis_count=sample_count, vis_folder=output_folder)
-    notcar_features = lf.extract_features(notcars, color_space=color_space, orient=orient,
-                                          pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                          hog_channel=hog_channel,
-                                          tag="notcar", vis_count=sample_count, vis_folder=output_folder)
+    car_features = lf.extract_features_list(cars, color_space=color_space, orient=orient,
+                                            pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
+                                            hog_channel=hog_channel,
+                                            tag="car", vis_count=sample_count, vis_folder=output_folder)
+    notcar_features = lf.extract_features_list(notcars, color_space=color_space, orient=orient,
+                                               pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
+                                               hog_channel=hog_channel,
+                                               tag="notcar", vis_count=sample_count, vis_folder=output_folder)
     print("Feature Extraction Duration: {} sec".format(time.time() - t))
 
     # Create an array stack of feature vectors
@@ -71,7 +71,27 @@ def prepare_classifier(cars, notcars, color_space='LUV', orient=9, pix_per_cell=
     # Check the score of the SVC
     print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
 
-    return svc
+    return svc, X_scaler
+
+
+def search_for_cars(image, svc, X_scaler):
+    drawn = lf.find_cars(image, svc, X_scaler)
+
+    plt.imshow(drawn)
+    plt.show()
+
+
+def demo_pipeline(training_pattern, output_folder, sample_image):
+    cars, not_cars = load_training_data(training_pattern)
+
+    print("cars: {}".format(len(cars)))
+    print("not_cars: {}".format(len(not_cars)))
+
+    svc, X_scaler = prepare_classifier(cars, not_cars, output_folder=output_folder)
+
+    image = mpimg.imread(sample_image)
+    features = lf.extract_features(sample_image, spatial_feat=False, hist_feat=False)
+    search_for_cars(image, svc, X_scaler)
 
 
 def main():
@@ -91,12 +111,7 @@ def main():
 
     options, args = parser.parse_args()
 
-    cars, not_cars = load_training_data(options.training_pattern)
-
-    print("cars: {}".format(len(cars)))
-    print("not_cars: {}".format(len(not_cars)))
-
-    prepare_classifier(cars, not_cars, output_folder=options.output_folder)
+    demo_pipeline(options.training_pattern, options.output_folder, "./samples/bbox-example-image.jpg")
 
 
 if __name__ == "__main__":
