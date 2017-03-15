@@ -20,8 +20,10 @@ import imageio
 imageio.plugins.ffmpeg.download()
 from moviepy.editor import VideoFileClip
 
+
 class VehicleDetectionPipeline:
 
+    output_folder = None  # output folder for any data generated
     svc = None  # classifier
     scaler = None  # used for scaling feature vectors
     raw_bboxes = None  # all matching bboxes at any scale, includes overlapping boxes
@@ -30,20 +32,29 @@ class VehicleDetectionPipeline:
     draw_raw = False  # use True to draw overlapping bounding boxes during image processing
     draw_heatmap = False  # use True to draw heatmap during image processing
     draw_fused = True  # use True to draw fused bounding boxes during image processing
+    frame_counter = 0
+    save_frame_range = None
+    orient = 9
+    pix_per_cell = 8
+    cell_per_block = 2
+    hist_bins = 32
+    spatial_size = (32, 32)
+    color_space = 'LUV'
+    ystart=380
+    ystop=720
 
     def __init__(self):
         pass
 
-    def prepare_classifier(self, cars, notcars, color_space='LUV', orient=9, pix_per_cell=8,
-                           cell_per_block=2, hog_channel='ALL', output_folder=None, sample_count=5):
+    def prepare_classifier(self, cars, notcars, output_folder=None, sample_count=5):
         t = time.time()
-        car_features = lf.extract_features_list(cars, color_space=color_space, orient=orient,
-                                                pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                                hog_channel=hog_channel,
+        car_features = lf.extract_features_list(cars, color_space=self.color_space, orient=self.orient,
+                                                pix_per_cell=self.pix_per_cell, cell_per_block=self.cell_per_block,
+                                                hog_channel='ALL',
                                                 tag="car", vis_count=sample_count, vis_folder=output_folder)
-        notcar_features = lf.extract_features_list(notcars, color_space=color_space, orient=orient,
-                                                   pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                                   hog_channel=hog_channel,
+        notcar_features = lf.extract_features_list(notcars, color_space=self.color_space, orient=self.orient,
+                                                   pix_per_cell=self.pix_per_cell, cell_per_block=self.cell_per_block,
+                                                   hog_channel='ALL',
                                                    tag="notcar", vis_count=sample_count, vis_folder=output_folder)
         print("Feature Extraction Duration: {} sec".format(time.time() - t))
 
@@ -76,15 +87,27 @@ class VehicleDetectionPipeline:
         self.scaler = X_scaler
 
     def identify_raw_bboxes(self, image, grid=False):
-        self.raw_bboxes = lf.find_cars(image, self.svc, self.scaler, grid=grid)
+        self.raw_bboxes = lf.find_cars(image, self.svc, self.scaler,
+                                       ystart=self.ystart, ystop=self.ystop,
+                                       orient=self.orient, pix_per_cell=self.pix_per_cell,
+                                       cell_per_block=self.cell_per_block, spatial_size=self.spatial_size,
+                                       hist_bins=self.hist_bins, grid=grid)
 
-    def generate_heatmap(self, image):
-        self.heatmap = lf.produce_heatmap(image,  self.raw_bboxes)
+    def generate_heatmap(self, image, threshold=3):
+        self.heatmap = lf.produce_heatmap(image,  self.raw_bboxes, threshold=threshold)
 
     def identify_fused_bboxes(self):
         self.fused_bboxes = lf.fuse_bboxes(self.heatmap)
 
     def apply_pipeline(self, image):
+        self.frame_counter += 1
+
+        # useful debugging condition, a range of troublesome images can optionally be saved to disk
+        if self.save_frame_range is not None and self.frame_counter in self.save_frame_range:
+            frame_output = '/'.join([self.output_folder, "frame{:05d}.jpg".format(self.frame_counter)])
+            cv2.imwrite(frame_output, cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            print("saved frame: {}".format(frame_output))
+
         self.identify_raw_bboxes(image)
         self.generate_heatmap(image)
         self.identify_fused_bboxes()
@@ -96,7 +119,11 @@ class VehicleDetectionPipeline:
             image = lf.draw_bboxes(image, self.raw_bboxes, thick=6)
 
         if self.draw_fused is True:
-            image = lf.draw_bboxes(image, self.fused_bboxes, thick=6)
+            image = lf.draw_bboxes(image, self.fused_bboxes, thick=8)
+
+        if self.frame_counter > 0:
+            cv2.putText(image, 'Frame({:05d})'.format(self.frame_counter), (10, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         return image
 
@@ -121,6 +148,7 @@ def demo_pipeline(training_pattern, output_folder, sample_image):
     print("not_car sample count: {}".format(len(not_cars)))
 
     pipeline = VehicleDetectionPipeline()
+    pipeline.output_folder = output_folder
     # train classifier on training data, also saves a few samples to the output folder
     pipeline.prepare_classifier(cars, not_cars, output_folder=output_folder)
 
@@ -162,12 +190,12 @@ def demo_pipeline(training_pattern, output_folder, sample_image):
     print("saved to: {}".format(search_sequence_filename))
 
 
-def process_video(video_file, pipeline, output_folder, save_frame_range):
-    if not path.exists(output_folder):
-        os.makedirs(output_folder)
+def process_video(video_file, pipeline):
+    if not path.exists(pipeline.output_folder):
+        os.makedirs(pipeline.output_folder)
 
     base_name = path.split(video_file)[1]
-    vdat_output = '/'.join([output_folder, "vdat_{}".format(base_name)])
+    vdat_output = '/'.join([pipeline.output_folder, "vdat_{}".format(base_name)])
     vclip = VideoFileClip(video_file, audio=False)
     vdat_clip = vclip.fl_image(pipeline.apply_pipeline)
     vdat_clip.write_videofile(vdat_output, audio=False)
@@ -195,16 +223,18 @@ def main():
 
     if 'all' == activity or 'demo' == activity:
         print("Demo pipeline components on sample images")
-        demo_pipeline(options.training_pattern, options.output_folder, "./samples/bbox-example-image.jpg")
+        demo_pipeline(options.training_pattern, options.output_folder, "./samples/frame00021.jpg")
 
     if 'all' == activity or 'video' == activity:
         video_file = options.video_input
         # train on sample data
         cars, not_cars = load_training_data(options.training_pattern)
         pipeline = VehicleDetectionPipeline()
+        pipeline.save_frame_range = options.save_frame_range
+        pipeline.output_folder = options.output_folder
         pipeline.prepare_classifier(cars, not_cars, output_folder=options.output_folder)
         print("Process video file {}".format(video_file))
-        process_video(video_file, pipeline, options.output_folder, save_frame_range=options.save_frame_range)
+        process_video(video_file, pipeline)
         print("Video processing complete")
 
 
