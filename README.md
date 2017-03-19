@@ -1,13 +1,15 @@
-# Vehicle Detection and Tracking
+#Vehicle Detection and Tracking
 
 This is the 5th and final project in the first third of the Udacity Self Driving Car Nanodegree.
 
 The purpose of this project is to identify other vehicles on the road.
 
-## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
+##Rubric Points
+
+Original rubric at Udacity: [RubricPoints](https://review.udacity.com/#!/rubrics/513/view)
 
 ---
-### Writeup
+###Writeup
 
 **1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.**
 
