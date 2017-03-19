@@ -117,7 +117,7 @@ def extract_features(image_file, color_space='RGB', spatial_size=(32, 32),
                      hist_bins=32, orient=9,
                      pix_per_cell=8, cell_per_block=2, hog_channel='ALL',
                      spatial_feat=True, hist_feat=True, hog_feat=True,
-                     tag='', vis=False, vis_folder=None):
+                     tag='', vis=False, vis_folder=None, flip=False):
     file_features = []
     vis_features = []
     hog_vis = None
@@ -135,6 +135,9 @@ def extract_features(image_file, color_space='RGB', spatial_size=(32, 32),
         image = mpimg.imread(image_file)
     else:
         raise ValueError("UNKNOWN FILE EXTENSION: {}".format(image_file))
+
+    if flip is True:
+        image = np.fliplr(image)
 
     # apply color conversion if other than 'RGB'
     if color_space != 'RGB':
@@ -207,6 +210,16 @@ def extract_features_list(imgs, color_space='RGB', spatial_size=(32, 32),
                              tag="{}-{}".format(tag, i), vis=vis, vis_folder=vis_folder)
 
         features.append(file_features)
+
+        file_features = \
+            extract_features(file, color_space=color_space, spatial_size=spatial_size,
+                             hist_bins=hist_bins, orient=orient,
+                             pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
+                             spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat,
+                             tag="{}-{}-flip".format(tag, i), vis=vis, vis_folder=vis_folder, flip=True)
+
+        features.append(file_features)
+
     # Return list of feature vectors
     return features
 

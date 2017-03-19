@@ -51,7 +51,7 @@ class VehicleDetectionPipeline:
     window_scales = [0.8, 1.2, 1.8]  # list of scales to use for window search
     bbox_history = []  # history of bounding boxes identifying probably object detections
     bbox_history_limit = 10  # number of frame results to remember in history
-    heatmap_frame_threshold = 1  # heat detection threshold in frame when deciding to include a box
+    heatmap_frame_threshold = 3  # heat detection threshold in frame when deciding to include a box
     heatmap_historic_threshold = 5  # heat detection threshold combined over the history for box inclusiion decision
 
     def __init__(self, cars, notcars, output_folder, save_frame_range=None):
@@ -102,7 +102,7 @@ class VehicleDetectionPipeline:
         rand_state = np.random.randint(0, 100)
         if test is True:
             X_train, X_test, y_train, y_test = train_test_split(
-                scaled_X, y, test_size=0.2, random_state=rand_state)
+                scaled_X, y, test_size=0.05, random_state=rand_state)
         else:
             X_train = scaled_X
             y_train = y
@@ -326,7 +326,7 @@ def main():
     parser.add_option('-o', '--output_folder', dest='output_folder', default='./output_folder',
                       help="output folder to hold examples of images during process.")
     parser.add_option('--save_frame_range', dest='save_frame_range',
-                      default=None,
+                      default=list(range(0, 1250)),
                       help="min,max inclusive frame ids to save frames to disk.")
 
     options, args = parser.parse_args()
