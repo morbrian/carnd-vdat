@@ -19,6 +19,7 @@ but exists separately to help generate examples of each step of our process.
 
 The [process_video](./vdat-pipeline.py) function prepares the pipeline object and starts video processing. 
 
+---
 ###Histogram of Oriented Gradients (HOG)
 
 **1. Explain how (and identify where in your code) you extracted HOG features from the training images.**
@@ -70,6 +71,7 @@ We consistently found we could easily do better than 99% accuracy, but due to th
 during the sliding window search at various scales, the fraction of a percent errors still showed up frequently during
 video processing.
 
+---
 ###Sliding Window Search
 
 **1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?**
@@ -96,7 +98,6 @@ column and the associated bounding boxes are excluded in the final **Fused** ima
 ![search_sequence2][search_sequence2]
 
 ---
-
 ### Video Implementation
 
 **1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding).**
