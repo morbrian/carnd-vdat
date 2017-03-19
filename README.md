@@ -6,9 +6,10 @@ The purpose of this project is to identify other vehicles on the road.
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
 
+---
 ### Writeup
 
-####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  
+**1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.**
 
 This file is the writeup.
 
@@ -20,7 +21,7 @@ The [process_video](./vdat-pipeline.py) function prepares the pipeline object an
 
 ###Histogram of Oriented Gradients (HOG)
 
-####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
+**1. Explain how (and identify where in your code) you extracted HOG features from the training images.**
 
 We used the large and small Udacity provided training sets, which consisted of samples identified as 'car' or 'notcar'.
 
@@ -48,14 +49,14 @@ to generate the HOG visualizations, and the plot at the far right includes the c
 ![notcar2_sequence][notcar2_sequence]
 ![notcar2f_sequence][notcar2f_sequence]
 
-####2. Explain how you settled on your final choice of HOG parameters.
+**2. Explain how you settled on your final choice of HOG parameters.**
 
 We tried various values for these parameters, and used the `accuracy_score` prediciton on the classifier
 to decide if a particular value was improving our results. We found the `LUV` color space to work best.
 We also chose to include `ALL` hog channels, and included both color and spatial histograms as part of
 our features array.
 
-####3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
+**3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).**
 
 We train the classifier using an ` LinearSVC` classifier from SciKitLearn in [prepare_classifier](./vdat-pipeline.py).
 
@@ -71,7 +72,7 @@ video processing.
 
 ###Sliding Window Search
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
+**1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?**
 
 The [find_cars](./lessons_functions.py) function performs a sliding window search on an image. It uses
 and overlapping grid approach to partition the larger image into smaller overlapping images which can be
@@ -83,7 +84,7 @@ below shows an example of how the overlapping grid appears.
 
 ![search_grid][search_grid]
 
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+**2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?**
 
 Below are two consecutive frame images visualizing how the pipeline identifies bounding boxes around
 the vehicles discovered in the image.
@@ -98,11 +99,11 @@ column and the associated bounding boxes are excluded in the final **Fused** ima
 
 ### Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding 
+**1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding).**
 
 Our final video is at [./output_folder/vdat_project_video.mp4](./output_folder/vdat_project_video.mp4)
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+**2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.**
 
 We used the processing framework proposed in the lesson to process the video, and then augmented it with
 some additional processing to reduce false postitives and to strengthen matches on the vehicles.
@@ -128,10 +129,9 @@ and we provide some additional detail below to describe what this does.
     is what we use to annotate vehicle locations in the image frame.
     
 ---
-
 ###Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+**1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?**
 
 Below we list some specific issues we encountered and how we resolved each of them, and we also included a closing
 remark for each item to discuss how our solution might fail or could be improved.
