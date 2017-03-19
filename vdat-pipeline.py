@@ -1,20 +1,13 @@
 import lessons_functions as lf
-import matplotlib.image as mpimg
-import numpy as np
-import cv2
-from skimage.feature import hog
-import time
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-import glob
 import time
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
-from skimage.feature import hog
 import os
 import os.path as path
 import imageio
@@ -23,46 +16,63 @@ from moviepy.editor import VideoFileClip
 
 
 class VehicleDetectionPipeline:
+    """
+    Class helps maintain configuration parameters and state for the detection pipeline.
+    Provides method calls for all steps of the pipeline, many of which are wrappers
+    used to call more specific functions from `lessons_functions.py`.
+    """
 
-    cars = None
-    notcars = None
+    cars = None  # list of cars sample data to train with
+    notcars = None  # list of notcars sample data to train with
     output_folder = None  # output folder for any data generated
     svc = None  # classifier
     scaler = None  # used for scaling feature vectors
     raw_bboxes = None  # all matching bboxes at any scale, includes overlapping boxes
-    frame_heatmap = None  # heatmap of weighted locations of overlapping matches
-    historic_heatmap = None  #
+    frame_heatmap = None  # heatmap for single frame
+    historic_heatmap = None  # heatmap for combined history of frames
     fused_bboxes = None  # collection of bboxes with duplicate overlapping matches reduced to single boxes
     draw_raw = True  # use True to draw overlapping bounding boxes during image processing
-    draw_raw_color = (255, 0, 0)
-    draw_fused_color = (0, 0, 255)
+    draw_raw_color = (255, 0, 0)  # draw single frame raw bboxes
+    draw_fused_color = (0, 0, 255)  # draw fused history of bboxes
     calculate_frame_heatmap = False  # use True to draw heatmap during image processing
-    calculate_historic_heatmap = True
+    calculate_historic_heatmap = True  # True to calculate historic heatmap
     draw_fused = True  # use True to draw fused bounding boxes during image processing
-    frame_counter = 0
-    save_frame_range = None
-    orient = 9
-    pix_per_cell = 8
-    cell_per_block = 2
-    cells_per_step = 1
-    hist_bins = 32
-    spatial_size = (32, 32)
-    color_space = 'LUV'
-    ystart = 390
-    ystop = 670
-    window_scales = [0.8, 1.2, 1.8]
-    bbox_history = []
-    bbox_history_limit = 30
-    heatmap_frame_threshold = 1
-    heatmap_historic_threshold = 20
+    frame_counter = 0  # used during video processing to identify frame number
+    save_frame_range = None  # optionally save frames identified in this list
+    orient = 9  # number of orientation bins (9 was consistently the best choice)
+    pix_per_cell = 8  # number of pixels in height/width to size each cell square
+    cell_per_block = 2  # number of cells in a block
+    cells_per_step = 1  # number of cells to move search window in each step
+    hist_bins = 32  # number of histogram bins when extracting features
+    spatial_size = (32, 32)  # size of spatial window feature
+    color_space = 'LUV'  # color space to use for feature extraction (LUV was consistently the best choice)
+    ystart = 390  # where search windows should start
+    ystop = 670  # where search windows should stop
+    window_scales = [0.8, 1.2, 1.8]  # list of scales to use for window search
+    bbox_history = []  # history of bounding boxes identifying probably object detections
+    bbox_history_limit = 10  # number of frame results to remember in history
+    heatmap_frame_threshold = 1  # heat detection threshold in frame when deciding to include a box
+    heatmap_historic_threshold = 5  # heat detection threshold combined over the history for box inclusiion decision
 
     def __init__(self, cars, notcars, output_folder, save_frame_range=None):
+        """
+        Initialize class
+        :param cars: list of cars samples
+        :param notcars: list of notcars samples
+        :param output_folder: output_folder to create on filesystem
+        :param save_frame_range: frame identifiers to save during video processing
+        """
         self.cars = cars
         self.notcars = notcars
         self.save_frame_range = save_frame_range
         self.output_folder = output_folder
 
     def prepare_classifier(self, sample_count=5, test=False):
+        """
+        Preprocess sample data and train classifier.
+        :param sample_count: number of samples to save for documentation purposes
+        :param test: True of some of the data should be used for testing classifier
+        """
         t = time.time()
         car_features = lf.extract_features_list(self.cars, color_space=self.color_space, orient=self.orient,
                                                 pix_per_cell=self.pix_per_cell, cell_per_block=self.cell_per_block,
@@ -93,12 +103,6 @@ class VehicleDetectionPipeline:
         if test is True:
             X_train, X_test, y_train, y_test = train_test_split(
                 scaled_X, y, test_size=0.2, random_state=rand_state)
-            # pool_size = len(y)
-            # test_size = int(pool_size / 5)
-            # X_train, y_train = shuffle(scaled_X[test_size:], y[test_size:])
-            # X_test, y_test = scaled_X[:test_size], y[:test_size]
-            # print("train size: {}, {}".format(len(X_train), len(y_train)))
-            # print("test size: {}, {}".format(len(X_test), len(y_test)))
         else:
             X_train = scaled_X
             y_train = y
@@ -119,6 +123,12 @@ class VehicleDetectionPipeline:
         self.scaler = X_scaler
 
     def identify_raw_bboxes(self, image, grid=False):
+        """
+        Identify bounding boxes for the current frame.
+        Processing includes a frame specific heatmap and fusing boxes, and result is included in history.
+        :param image: image to search
+        :param grid: True to include all boxes regardless of classifier prediction (useful for documentation)
+        """
         bboxes = []
         for scale in self.window_scales:
             bboxes.extend(lf.find_cars(image, self.svc, self.scaler,
@@ -127,24 +137,57 @@ class VehicleDetectionPipeline:
                                        cell_per_block=self.cell_per_block, spatial_size=self.spatial_size,
                                        hist_bins=self.hist_bins, grid=grid))
 
-        self.bbox_history = [bboxes] + self.bbox_history
-        if len(self.bbox_history) > self.bbox_history_limit:
-            self.bbox_history = self.bbox_history[:-1]
+        # temporary store in raw_bboxes to prepare for additional processing
         self.raw_bboxes = bboxes
 
+        # generate single frame heatmap and fused boxes
+        self.generate_frame_heatmap(image)
+        frame_fused = lf.fuse_bboxes(self.frame_heatmap)
+
+        # remember this frame's bboxes in history
+        self.bbox_history = [frame_fused] + self.bbox_history
+        if len(self.bbox_history) > self.bbox_history_limit:
+            self.bbox_history = self.bbox_history[:-1]
+
+        # save final fused result for frame
+        self.raw_bboxes = frame_fused
+
     def generate_frame_heatmap(self, image):
+        """
+        Generate heatmap for a single frame using raw_bboxes
+        :param image: image to process
+        """
         self.frame_heatmap = lf.produce_heatmap(image,  self.raw_bboxes, threshold=self.heatmap_frame_threshold)
 
     def generate_historic_heatmap(self, image):
+        """
+        Generate heatmap from history of bounding boxes
+        :param image: image to process
+        """
         historic = []
         for bbox in self.bbox_history:
             historic.extend(bbox)
         self.historic_heatmap = lf.produce_heatmap(image,  historic, threshold=self.heatmap_historic_threshold)
 
-    def identify_fused_bboxes(self):
-        self.fused_bboxes = lf.fuse_bboxes(self.historic_heatmap)
+    def identify_fused_bboxes(self, heatmap=None):
+        """
+        Fuse the bounding boxes identified in a heatmap.
+        Use heatmap if specified, otherwise if history buffer is nearly full use that, otherwise use frame_heatmap
+        :param heatmap: heatmap to use
+        """
+        if heatmap is not None:
+            self.fused_bboxes = lf.fuse_bboxes(heatmap)
+        elif len(self.bbox_history) >= self.bbox_history_limit - 2:
+            self.fused_bboxes = lf.fuse_bboxes(self.historic_heatmap)
+        else:
+            self.fused_bboxes = lf.fuse_bboxes(self.frame_heatmap)
 
     def apply_pipeline(self, image):
+        """
+        Apply the entire pipeline to a single image and return an annotated image.
+        :param image: frame to process
+        :return: annotated frame
+        """
         self.frame_counter += 1
 
         # useful debugging condition, a range of troublesome images can optionally be saved to disk
@@ -154,9 +197,6 @@ class VehicleDetectionPipeline:
             print("saved frame: {}".format(frame_output))
 
         self.identify_raw_bboxes(image)
-
-        if self.calculate_frame_heatmap is True:
-            self.generate_frame_heatmap(image)
 
         if self.calculate_historic_heatmap is True:
             self.generate_historic_heatmap(image)
@@ -177,6 +217,11 @@ class VehicleDetectionPipeline:
 
 
 def load_training_data(path_patterns):
+    """
+    Organize all file names into cars or notcars.
+    :param path_patterns:
+    :return:
+    """
     import glob
     cars = []
     notcars = []
@@ -192,6 +237,12 @@ def load_training_data(path_patterns):
 
 
 def demo_pipeline(pipeline, sample_images):
+    """
+    Demo the pipeline on the list of sample_images, storing various annotated images
+    to help describe each step of the process.
+    :param pipeline: pipeline object
+    :param sample_images: list of sample images to process
+    """
     pipeline.prepare_classifier(test=True)
     # read single frame sample to demo processes on
     for sample_image in sample_images:
@@ -214,7 +265,7 @@ def demo_pipeline(pipeline, sample_images):
         pipeline.identify_raw_bboxes(image)
         raw_bbox_image = lf.draw_bboxes(np.copy(image), pipeline.raw_bboxes)
 
-        pipeline.generate_frame_heatmap(image)
+        # pipeline.generate_frame_heatmap(image)
         pipeline.generate_historic_heatmap(image)
         pipeline.identify_fused_bboxes()
         fused_image = lf.draw_bboxes(np.copy(image), pipeline.fused_bboxes, thick=6)
@@ -244,6 +295,11 @@ def demo_pipeline(pipeline, sample_images):
 
 
 def process_video(video_file, pipeline):
+    """
+    Process a video file and produce an annotated version of the video
+    :param video_file: video to process
+    :param pipeline: configured pipeline object to use for processing
+    """
     if not path.exists(pipeline.output_folder):
         os.makedirs(pipeline.output_folder)
     pipeline.prepare_classifier()
@@ -260,7 +316,7 @@ def main():
     import optparse
 
     parser = optparse.OptionParser()
-    parser.add_option('-a', '--activity', dest='activity', default='demo',
+    parser.add_option('-a', '--activity', dest='activity', default='video',
                       help="activity to perform [demo, video, all], to create demo images or process video or both")
     parser.add_option('-v', '--video_input', dest='video_input', default='./project_video.mp4',
                       help="video file to process.")

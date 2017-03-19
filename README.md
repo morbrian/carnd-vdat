@@ -9,21 +9,22 @@ The purpose of this project is to identify other vehicles on the road.
 ### Writeup
 
 ####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  
-You can submit your writeup as markdown or pdf.  
-[Here](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) 
-is a template writeup for this project you can use as a guide and a starting point.  
 
 This file is the writeup.
 
-The [demo_pipeline](./vdat-pipeline.py) function is written to produce all of the sample images
+The [demo_pipeline](./vdat-pipeline.py) function is written to produce most of the sample images
 in this write up. It calls the same sequence of functions as our video procesing pipeline,
 but exists separately to help generate examples of each step of our process.
+
+The [process_video](./vdat-pipeline.py) function prepares the pipeline object and starts video processing. 
 
 ###Histogram of Oriented Gradients (HOG)
 
 ####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
 
-We used the Udacity provided training set, which consisted of samples identified as 'car' or 'notcar'.
+We used the large and small Udacity provided training sets, which consisted of samples identified as 'car' or 'notcar'.
+
+There were more 
 
 Here is a sample **car** image:
 
