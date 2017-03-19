@@ -41,10 +41,10 @@ class VehicleDetectionPipeline:
     draw_fused = True  # use True to draw fused bounding boxes during image processing
     frame_counter = 0
     save_frame_range = None
-    orient = 16
+    orient = 9
     pix_per_cell = 8
     cell_per_block = 2
-    cells_per_step = 2
+    cells_per_step = 1
     hist_bins = 32
     spatial_size = (32, 32)
     color_space = 'LUV'
@@ -52,9 +52,9 @@ class VehicleDetectionPipeline:
     ystop = 670
     window_scales = [0.8, 1.2, 1.8]
     bbox_history = []
-    bbox_history_limit = 10
+    bbox_history_limit = 30
     heatmap_frame_threshold = 1
-    heatmap_historic_threshold = 10
+    heatmap_historic_threshold = 20
 
     def __init__(self, cars, notcars, output_folder, save_frame_range=None):
         self.cars = cars
@@ -260,7 +260,7 @@ def main():
     import optparse
 
     parser = optparse.OptionParser()
-    parser.add_option('-a', '--activity', dest='activity', default='video',
+    parser.add_option('-a', '--activity', dest='activity', default='demo',
                       help="activity to perform [demo, video, all], to create demo images or process video or both")
     parser.add_option('-v', '--video_input', dest='video_input', default='./project_video.mp4',
                       help="video file to process.")
@@ -290,16 +290,16 @@ def main():
                        # "./samples/frame00030.jpg", "./samples/frame00031.jpg", "./samples/frame00032.jpg", "./samples/frame00033.jpg", "./samples/frame00034.jpg",
                        # "./samples/frame00035.jpg", "./samples/frame00036.jpg", "./samples/frame00037.jpg", "./samples/frame00038.jpg", "./samples/frame00039.jpg",
                        # "./samples/frame00040.jpg"
-                       # "./samples/frame00300.jpg", "./samples/frame00301.jpg", "./samples/frame00302.jpg", "./samples/frame00303.jpg", "./samples/frame00304.jpg",
-                       # "./samples/frame00305.jpg", "./samples/frame00306.jpg", "./samples/frame00307.jpg", "./samples/frame00308.jpg", "./samples/frame00309.jpg",
-                       # "./samples/frame00310.jpg", "./samples/frame00311.jpg", "./samples/frame00312.jpg", "./samples/frame00313.jpg", "./samples/frame00314.jpg",
-                       # "./samples/frame00315.jpg", "./samples/frame00316.jpg", "./samples/frame00317.jpg", "./samples/frame00318.jpg", "./samples/frame00319.jpg",
-                       # "./samples/frame00320.jpg"
-                       "./samples/frame00460.jpg", "./samples/frame00461.jpg", "./samples/frame00462.jpg", "./samples/frame00463.jpg", "./samples/frame00464.jpg",
-                       "./samples/frame00465.jpg", "./samples/frame00466.jpg", "./samples/frame00467.jpg", "./samples/frame00468.jpg", "./samples/frame00469.jpg",
-                       "./samples/frame00470.jpg", "./samples/frame00471.jpg", "./samples/frame00472.jpg", "./samples/frame00473.jpg", "./samples/frame00474.jpg",
-                       "./samples/frame00475.jpg", "./samples/frame00476.jpg", "./samples/frame00477.jpg", "./samples/frame00478.jpg", "./samples/frame00479.jpg",
-                       "./samples/frame00480.jpg"
+                       "./samples/frame00300.jpg", "./samples/frame00301.jpg", "./samples/frame00302.jpg", "./samples/frame00303.jpg", "./samples/frame00304.jpg",
+                       "./samples/frame00305.jpg", "./samples/frame00306.jpg", "./samples/frame00307.jpg", "./samples/frame00308.jpg", "./samples/frame00309.jpg",
+                       "./samples/frame00310.jpg", "./samples/frame00311.jpg", "./samples/frame00312.jpg", "./samples/frame00313.jpg", "./samples/frame00314.jpg",
+                       "./samples/frame00315.jpg", "./samples/frame00316.jpg", "./samples/frame00317.jpg", "./samples/frame00318.jpg", "./samples/frame00319.jpg",
+                       "./samples/frame00320.jpg"
+                       # "./samples/frame00460.jpg", "./samples/frame00461.jpg", "./samples/frame00462.jpg", "./samples/frame00463.jpg", "./samples/frame00464.jpg",
+                       # "./samples/frame00465.jpg", "./samples/frame00466.jpg", "./samples/frame00467.jpg", "./samples/frame00468.jpg", "./samples/frame00469.jpg",
+                       # "./samples/frame00470.jpg", "./samples/frame00471.jpg", "./samples/frame00472.jpg", "./samples/frame00473.jpg", "./samples/frame00474.jpg",
+                       # "./samples/frame00475.jpg", "./samples/frame00476.jpg", "./samples/frame00477.jpg", "./samples/frame00478.jpg", "./samples/frame00479.jpg",
+                       # "./samples/frame00480.jpg"
                        ])
 
     if 'all' == activity or 'video' == activity:
