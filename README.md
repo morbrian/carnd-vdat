@@ -1,15 +1,15 @@
-#Vehicle Detection and Tracking
+# Vehicle Detection and Tracking
 
 This is the 5th and final project in the first third of the Udacity Self Driving Car Nanodegree.
 
 The purpose of this project is to identify other vehicles on the road.
 
-##Rubric Points
+## Rubric Points
 
 Original rubric at Udacity: [RubricPoints](https://review.udacity.com/#!/rubrics/513/view)
 
 ---
-###Writeup
+### Writeup
 
 **1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.**
 
@@ -22,7 +22,7 @@ but exists separately to help generate examples of each step of our process.
 The [process_video](./vdat-pipeline.py) function prepares the pipeline object and starts video processing. 
 
 ---
-###Histogram of Oriented Gradients (HOG)
+### Histogram of Oriented Gradients (HOG)
 
 **1. Explain how (and identify where in your code) you extracted HOG features from the training images.**
 
@@ -74,7 +74,7 @@ during the sliding window search at various scales, the fraction of a percent er
 video processing.
 
 ---
-###Sliding Window Search
+### Sliding Window Search
 
 **1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?**
 
@@ -132,7 +132,7 @@ and we provide some additional detail below to describe what this does.
     is what we use to annotate vehicle locations in the image frame.
     
 ---
-###Discussion
+### Discussion
 
 **1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?**
 
