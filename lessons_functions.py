@@ -117,10 +117,16 @@ def extract_features(image_file, color_space='RGB', spatial_size=(32, 32),
             os.makedirs(vis_folder)
 
     bins_range = (0, 255)
-    if path.splitext(image_file)[1] == ".png":
-        bins_range = (0, 1.0)
+    # bins_range = (0, 1.0)
+    file_extension = path.splitext(image_file)[1]
+    if file_extension == ".png":
+        image = cv2.imread(image_file)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    elif file_extension == ".jpg" or file_extension == ".jpeg":
+        image = mpimg.imread(image_file)
+    else:
+        raise ValueError("UNKNOWN FILE EXTENSION: {}".format(image_file))
 
-    image = mpimg.imread(image_file)
     # apply color conversion if other than 'RGB'
     if color_space != 'RGB':
         feature_image = convert_color(image, color_space)
@@ -255,8 +261,8 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
 
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.2,
-              orient=9, pix_per_cell=8, cell_per_block=2,
+def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1,
+              orient=9, pix_per_cell=4, cell_per_block=2, cells_per_step=2,
               spatial_size=(32, 32), hist_bins=32, grid=False):
 
     img_tosearch = img[ystart:ystop, :, :]
@@ -277,7 +283,6 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.2,
     # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
     window = 64
     nblocks_per_window = (window // pix_per_cell)-1
-    cells_per_step = 1  # Instead of overlap, define how many cells to step
     nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
     nysteps = (nyblocks - nblocks_per_window) // cells_per_step
 
@@ -301,7 +306,7 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1.2,
             ytop = ypos*pix_per_cell
 
             # Extract the image patch
-            subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
+            subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64, 64))
 
             # Get color features
             spatial_features = bin_spatial(subimg, size=spatial_size)
@@ -329,7 +334,7 @@ def add_heat(heatmap, bbox_list):
         heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
     # Return updated heatmap
-    return heatmap  # Iterate through list of bboxes
+    return heatmap
 
 
 def apply_threshold(heatmap, threshold):
