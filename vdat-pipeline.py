@@ -32,7 +32,7 @@ class VehicleDetectionPipeline:
     historic_heatmap = None  # heatmap for combined history of frames
     fused_bboxes = None  # collection of bboxes with duplicate overlapping matches reduced to single boxes
     draw_raw = True  # use True to draw overlapping bounding boxes during image processing
-    draw_raw_color = (255, 0, 0)  # draw single frame raw bboxes
+    draw_raw_color = (155, 0, 0)  # draw single frame raw bboxes
     draw_fused_color = (0, 0, 255)  # draw fused history of bboxes
     calculate_frame_heatmap = False  # use True to draw heatmap during image processing
     calculate_historic_heatmap = True  # True to calculate historic heatmap
@@ -48,11 +48,13 @@ class VehicleDetectionPipeline:
     color_space = 'LUV'  # color space to use for feature extraction (LUV was consistently the best choice)
     ystart = 390  # where search windows should start
     ystop = 670  # where search windows should stop
-    window_scales = [0.8, 1.2, 1.8]  # list of scales to use for window search
+    window_scales = [0.8, 1.0, 1.2, 1.8]  # list of scales to use for window search
     bbox_history = []  # history of bounding boxes identifying probably object detections
     bbox_history_limit = 10  # number of frame results to remember in history
-    heatmap_frame_threshold = 3  # heat detection threshold in frame when deciding to include a box
-    heatmap_historic_threshold = 5  # heat detection threshold combined over the history for box inclusiion decision
+    heatmap_frame_threshold = 1  # heat detection threshold in frame when deciding to include a box
+    heatmap_historic_threshold = 7  # heat detection threshold combined over the history for box inclusion decision
+    classifier_file = None
+    scaler_file = None
 
     def __init__(self, cars, notcars, output_folder, save_frame_range=None):
         """
@@ -66,6 +68,8 @@ class VehicleDetectionPipeline:
         self.notcars = notcars
         self.save_frame_range = save_frame_range
         self.output_folder = output_folder
+        self.classifier_file = '/'.join([output_folder, 'classifier.pkl'])
+        self.scaler_file = '/'.join([output_folder, 'scaler.pkl'])
 
     def prepare_classifier(self, sample_count=5, test=False):
         """
@@ -73,6 +77,16 @@ class VehicleDetectionPipeline:
         :param sample_count: number of samples to save for documentation purposes
         :param test: True of some of the data should be used for testing classifier
         """
+        import pickle
+        if path.exists(self.classifier_file):
+            with open(self.classifier_file, 'rb') as fid:
+                self.svc = pickle.load(fid)
+            with open(self.scaler_file, 'rb') as fid:
+                self.scaler = pickle.load(fid)
+
+            print("loaded classifer and scaler from: {} and {}".format(self.classifier_file, self.scaler_file))
+            return
+
         t = time.time()
         car_features = lf.extract_features_list(self.cars, color_space=self.color_space, orient=self.orient,
                                                 pix_per_cell=self.pix_per_cell, cell_per_block=self.cell_per_block,
@@ -122,6 +136,14 @@ class VehicleDetectionPipeline:
         self.svc = svc
         self.scaler = X_scaler
 
+        with open(self.classifier_file, 'wb') as f:
+            pickle.dump(svc, f)
+
+        with open(self.scaler_file, 'wb') as f:
+            pickle.dump(X_scaler, f)
+
+        print("saved classifer and scaler to: {} and {}".format(self.classifier_file, self.scaler_file))
+
     def identify_raw_bboxes(self, image, grid=False):
         """
         Identify bounding boxes for the current frame.
@@ -144,11 +166,6 @@ class VehicleDetectionPipeline:
         self.generate_frame_heatmap(image)
         frame_fused = lf.fuse_bboxes(self.frame_heatmap)
 
-        # remember this frame's bboxes in history
-        self.bbox_history = [frame_fused] + self.bbox_history
-        if len(self.bbox_history) > self.bbox_history_limit:
-            self.bbox_history = self.bbox_history[:-1]
-
         # save final fused result for frame
         self.raw_bboxes = frame_fused
 
@@ -167,6 +184,9 @@ class VehicleDetectionPipeline:
         historic = []
         for bbox in self.bbox_history:
             historic.extend(bbox)
+
+        historic.extend(self.raw_bboxes)
+
         self.historic_heatmap = lf.produce_heatmap(image,  historic, threshold=self.heatmap_historic_threshold)
 
     def identify_fused_bboxes(self, heatmap=None):
@@ -181,6 +201,11 @@ class VehicleDetectionPipeline:
             self.fused_bboxes = lf.fuse_bboxes(self.historic_heatmap)
         else:
             self.fused_bboxes = lf.fuse_bboxes(self.frame_heatmap)
+
+        # remember this frame's bboxes in history
+        self.bbox_history = [self.fused_bboxes] + self.bbox_history
+        if len(self.bbox_history) > self.bbox_history_limit:
+            self.bbox_history = self.bbox_history[:-1]
 
     def apply_pipeline(self, image):
         """
@@ -203,18 +228,24 @@ class VehicleDetectionPipeline:
 
         self.identify_fused_bboxes()
 
-        if self.draw_raw is True:
+        if self.draw_raw is True and self.buffering is False:
             image = lf.draw_bboxes(image, self.raw_bboxes, color=self.draw_raw_color, thick=5)
 
-        if self.draw_fused is True:
+        if self.draw_fused is True and self.buffering is False:
             image = lf.draw_bboxes(image, self.fused_bboxes, color=self.draw_fused_color, thick=8)
 
         if self.frame_counter > 0:
             cv2.putText(image, 'Frame({:05d})'.format(self.frame_counter), (10, 90),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
+        if self.buffering is True:
+            cv2.putText(image, 'buffering...', (10, 120),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
         return image
 
+    def buffering(self):
+        return len(self.bbox_history) > self.bbox_history_limit - 2
 
 def load_training_data(path_patterns):
     """
@@ -326,7 +357,7 @@ def main():
     parser.add_option('-o', '--output_folder', dest='output_folder', default='./output_folder',
                       help="output folder to hold examples of images during process.")
     parser.add_option('--save_frame_range', dest='save_frame_range',
-                      default=list(range(0, 1250)),
+                      default=None,
                       help="min,max inclusive frame ids to save frames to disk.")
 
     options, args = parser.parse_args()
@@ -341,22 +372,386 @@ def main():
         print("Demo pipeline components on sample images")
         demo_pipeline(pipeline,
                       [
-                       # "./samples/frame00020.jpg", "./samples/frame00021.jpg", "./samples/frame00022.jpg", "./samples/frame00023.jpg", "./samples/frame00024.jpg",
-                       # "./samples/frame00025.jpg", "./samples/frame00026.jpg", "./samples/frame00027.jpg", "./samples/frame00028.jpg", "./samples/frame00029.jpg",
-                       # "./samples/frame00030.jpg", "./samples/frame00031.jpg", "./samples/frame00032.jpg", "./samples/frame00033.jpg", "./samples/frame00034.jpg",
-                       # "./samples/frame00035.jpg", "./samples/frame00036.jpg", "./samples/frame00037.jpg", "./samples/frame00038.jpg", "./samples/frame00039.jpg",
-                       # "./samples/frame00040.jpg"
-                       "./samples/frame00300.jpg", "./samples/frame00301.jpg", "./samples/frame00302.jpg", "./samples/frame00303.jpg", "./samples/frame00304.jpg",
-                       "./samples/frame00305.jpg", "./samples/frame00306.jpg", "./samples/frame00307.jpg", "./samples/frame00308.jpg", "./samples/frame00309.jpg",
-                       "./samples/frame00310.jpg", "./samples/frame00311.jpg", "./samples/frame00312.jpg", "./samples/frame00313.jpg", "./samples/frame00314.jpg",
-                       "./samples/frame00315.jpg", "./samples/frame00316.jpg", "./samples/frame00317.jpg", "./samples/frame00318.jpg", "./samples/frame00319.jpg",
-                       "./samples/frame00320.jpg"
-                       # "./samples/frame00460.jpg", "./samples/frame00461.jpg", "./samples/frame00462.jpg", "./samples/frame00463.jpg", "./samples/frame00464.jpg",
-                       # "./samples/frame00465.jpg", "./samples/frame00466.jpg", "./samples/frame00467.jpg", "./samples/frame00468.jpg", "./samples/frame00469.jpg",
-                       # "./samples/frame00470.jpg", "./samples/frame00471.jpg", "./samples/frame00472.jpg", "./samples/frame00473.jpg", "./samples/frame00474.jpg",
-                       # "./samples/frame00475.jpg", "./samples/frame00476.jpg", "./samples/frame00477.jpg", "./samples/frame00478.jpg", "./samples/frame00479.jpg",
-                       # "./samples/frame00480.jpg"
-                       ])
+                          # "./samples/frame00001.jpg",
+                          # "./samples/frame00002.jpg",
+                          # "./samples/frame00003.jpg",
+                          # "./samples/frame00004.jpg",
+                          # "./samples/frame00005.jpg",
+                          # "./samples/frame00006.jpg",
+                          # "./samples/frame00007.jpg",
+                          # "./samples/frame00008.jpg",
+                          # "./samples/frame00009.jpg",
+                          # "./samples/frame00010.jpg",
+                          # "./samples/frame00011.jpg",
+                          # "./samples/frame00012.jpg",
+                          # "./samples/frame00013.jpg",
+                          # "./samples/frame00014.jpg",
+                          # "./samples/frame00015.jpg",
+                          # "./samples/frame00016.jpg",
+                          # "./samples/frame00017.jpg",
+                          # "./samples/frame00018.jpg",
+                          # "./samples/frame00019.jpg",
+                          # "./samples/frame00020.jpg",
+                          # "./samples/frame00021.jpg",
+                          # "./samples/frame00022.jpg",
+                          # "./samples/frame00023.jpg",
+                          # "./samples/frame00024.jpg",
+                          # "./samples/frame00025.jpg",
+                          # "./samples/frame00026.jpg",
+                          # "./samples/frame00027.jpg",
+                          # "./samples/frame00028.jpg",
+                          # "./samples/frame00029.jpg",
+                          # "./samples/frame00030.jpg",
+                          # "./samples/frame00031.jpg",
+                          # "./samples/frame00032.jpg",
+                          # "./samples/frame00033.jpg",
+                          # "./samples/frame00034.jpg",
+                          # "./samples/frame00035.jpg",
+                          # "./samples/frame00036.jpg",
+                          # "./samples/frame00037.jpg",
+                          # "./samples/frame00038.jpg",
+                          # "./samples/frame00039.jpg",
+                          # "./samples/frame00040.jpg",
+                          # "./samples/frame00041.jpg",
+                          # "./samples/frame00042.jpg",
+                          # "./samples/frame00043.jpg",
+                          # "./samples/frame00044.jpg",
+                          # "./samples/frame00045.jpg",
+                          # "./samples/frame00046.jpg",
+                          # "./samples/frame00047.jpg",
+                          # "./samples/frame00048.jpg",
+                          # "./samples/frame00049.jpg",
+                          # "./samples/frame00050.jpg",
+                          # "./samples/frame00051.jpg",
+                          # "./samples/frame00052.jpg",
+                          # "./samples/frame00053.jpg",
+                          # "./samples/frame00054.jpg",
+                          # "./samples/frame00055.jpg",
+                          # "./samples/frame00056.jpg",
+                          # "./samples/frame00057.jpg",
+                          # "./samples/frame00058.jpg",
+                          # "./samples/frame00059.jpg",
+                          # "./samples/frame00060.jpg",
+                          # "./samples/frame00061.jpg",
+                          # "./samples/frame00062.jpg",
+                          # "./samples/frame00063.jpg",
+                          # "./samples/frame00064.jpg",
+                          # "./samples/frame00065.jpg",
+                          # "./samples/frame00066.jpg",
+                          # "./samples/frame00067.jpg",
+                          # "./samples/frame00068.jpg",
+                          # "./samples/frame00069.jpg",
+                          # "./samples/frame00070.jpg",
+                          # "./samples/frame00071.jpg",
+                          # "./samples/frame00072.jpg",
+                          # "./samples/frame00073.jpg",
+                          # "./samples/frame00074.jpg",
+                          # "./samples/frame00075.jpg",
+                          # "./samples/frame00076.jpg",
+                          # "./samples/frame00077.jpg",
+                          # "./samples/frame00078.jpg",
+                          # "./samples/frame00079.jpg",
+                          # "./samples/frame00080.jpg",
+                          # "./samples/frame00081.jpg",
+                          # "./samples/frame00082.jpg",
+                          # "./samples/frame00083.jpg",
+                          # "./samples/frame00084.jpg",
+                          # "./samples/frame00085.jpg",
+                          # "./samples/frame00086.jpg",
+                          # "./samples/frame00087.jpg",
+                          # "./samples/frame00088.jpg",
+                          # "./samples/frame00089.jpg",
+                          # "./samples/frame00090.jpg",
+                          # "./samples/frame00091.jpg",
+                          # "./samples/frame00092.jpg",
+                          # "./samples/frame00093.jpg",
+                          # "./samples/frame00094.jpg",
+                          # "./samples/frame00095.jpg",
+                          # "./samples/frame00096.jpg",
+                          # "./samples/frame00097.jpg",
+                          # "./samples/frame00098.jpg",
+                          # "./samples/frame00099.jpg"
+                          # "./samples/frame00400.jpg",
+                          # "./samples/frame00401.jpg",
+                          # "./samples/frame00402.jpg",
+                          # "./samples/frame00403.jpg",
+                          # "./samples/frame00404.jpg",
+                          # "./samples/frame00405.jpg",
+                          # "./samples/frame00406.jpg",
+                          # "./samples/frame00407.jpg",
+                          # "./samples/frame00408.jpg",
+                          # "./samples/frame00409.jpg",
+                          # "./samples/frame00410.jpg",
+                          # "./samples/frame00411.jpg",
+                          # "./samples/frame00412.jpg",
+                          # "./samples/frame00413.jpg",
+                          # "./samples/frame00414.jpg",
+                          # "./samples/frame00415.jpg",
+                          # "./samples/frame00416.jpg",
+                          # "./samples/frame00417.jpg",
+                          # "./samples/frame00418.jpg",
+                          # "./samples/frame00419.jpg",
+                          # "./samples/frame00420.jpg",
+                          # "./samples/frame00421.jpg",
+                          # "./samples/frame00422.jpg",
+                          # "./samples/frame00423.jpg",
+                          # "./samples/frame00424.jpg",
+                          # "./samples/frame00425.jpg",
+                          # "./samples/frame00426.jpg",
+                          # "./samples/frame00427.jpg",
+                          # "./samples/frame00428.jpg",
+                          # "./samples/frame00429.jpg",
+                          # "./samples/frame00430.jpg",
+                          # "./samples/frame00431.jpg",
+                          # "./samples/frame00432.jpg",
+                          # "./samples/frame00433.jpg",
+                          # "./samples/frame00434.jpg",
+                          # "./samples/frame00435.jpg",
+                          # "./samples/frame00436.jpg",
+                          # "./samples/frame00437.jpg",
+                          # "./samples/frame00438.jpg",
+                          # "./samples/frame00439.jpg",
+                          # "./samples/frame00440.jpg",
+                          # "./samples/frame00441.jpg",
+                          # "./samples/frame00442.jpg",
+                          # "./samples/frame00443.jpg",
+                          # "./samples/frame00444.jpg",
+                          "./samples/frame00445.jpg",
+                          "./samples/frame00446.jpg",
+                          "./samples/frame00447.jpg",
+                          "./samples/frame00448.jpg",
+                          "./samples/frame00449.jpg",
+                          "./samples/frame00450.jpg",
+                          "./samples/frame00451.jpg",
+                          "./samples/frame00452.jpg",
+                          "./samples/frame00453.jpg",
+                          "./samples/frame00454.jpg",
+                          "./samples/frame00455.jpg",
+                          "./samples/frame00456.jpg",
+                          "./samples/frame00457.jpg",
+                          "./samples/frame00458.jpg",
+                          "./samples/frame00459.jpg",
+                          "./samples/frame00460.jpg",
+                          "./samples/frame00461.jpg",
+                          "./samples/frame00462.jpg",
+                          "./samples/frame00463.jpg",
+                          "./samples/frame00464.jpg",
+                          "./samples/frame00465.jpg",
+                          "./samples/frame00466.jpg",
+                          "./samples/frame00467.jpg",
+                          "./samples/frame00468.jpg",
+                          "./samples/frame00469.jpg",
+                          "./samples/frame00470.jpg",
+                          "./samples/frame00471.jpg",
+                          "./samples/frame00472.jpg",
+                          "./samples/frame00473.jpg",
+                          "./samples/frame00474.jpg",
+                          "./samples/frame00475.jpg",
+                          "./samples/frame00476.jpg",
+                          "./samples/frame00477.jpg",
+                          "./samples/frame00478.jpg",
+                          "./samples/frame00479.jpg",
+                          "./samples/frame00480.jpg",
+                          "./samples/frame00481.jpg",
+                          "./samples/frame00482.jpg",
+                          "./samples/frame00483.jpg",
+                          "./samples/frame00484.jpg",
+                          "./samples/frame00485.jpg",
+                          "./samples/frame00486.jpg",
+                          "./samples/frame00487.jpg",
+                          "./samples/frame00488.jpg",
+                          "./samples/frame00489.jpg",
+                          "./samples/frame00490.jpg",
+                          "./samples/frame00491.jpg",
+                          "./samples/frame00492.jpg",
+                          "./samples/frame00493.jpg",
+                          "./samples/frame00494.jpg",
+                          "./samples/frame00495.jpg",
+                          "./samples/frame00496.jpg",
+                          "./samples/frame00497.jpg",
+                          "./samples/frame00498.jpg",
+                          "./samples/frame00499.jpg",
+                          "./samples/frame00500.jpg",
+                          "./samples/frame00501.jpg",
+                          "./samples/frame00502.jpg",
+                          "./samples/frame00503.jpg",
+                          "./samples/frame00504.jpg",
+                          "./samples/frame00505.jpg",
+                          "./samples/frame00506.jpg",
+                          "./samples/frame00507.jpg",
+                          "./samples/frame00508.jpg",
+                          "./samples/frame00509.jpg",
+                          "./samples/frame00510.jpg",
+                          "./samples/frame00511.jpg",
+                          "./samples/frame00512.jpg",
+                          "./samples/frame00513.jpg",
+                          "./samples/frame00514.jpg",
+                          "./samples/frame00515.jpg",
+                          "./samples/frame00516.jpg",
+                          "./samples/frame00517.jpg",
+                          "./samples/frame00518.jpg",
+                          "./samples/frame00519.jpg",
+                          "./samples/frame00520.jpg",
+                          "./samples/frame00521.jpg",
+                          "./samples/frame00522.jpg",
+                          "./samples/frame00523.jpg",
+                          "./samples/frame00524.jpg",
+                          "./samples/frame00525.jpg",
+                          "./samples/frame00526.jpg",
+                          "./samples/frame00527.jpg",
+                          "./samples/frame00528.jpg",
+                          "./samples/frame00529.jpg",
+                          "./samples/frame00530.jpg",
+                          "./samples/frame00531.jpg",
+                          "./samples/frame00532.jpg",
+                          "./samples/frame00533.jpg",
+                          "./samples/frame00534.jpg",
+                          "./samples/frame00535.jpg",
+                          "./samples/frame00536.jpg",
+                          "./samples/frame00537.jpg",
+                          "./samples/frame00538.jpg",
+                          "./samples/frame00539.jpg",
+                          "./samples/frame00540.jpg",
+                          "./samples/frame00541.jpg",
+                          "./samples/frame00542.jpg",
+                          "./samples/frame00543.jpg",
+                          "./samples/frame00544.jpg",
+                          "./samples/frame00545.jpg",
+                          "./samples/frame00546.jpg",
+                          "./samples/frame00547.jpg",
+                          "./samples/frame00548.jpg",
+                          "./samples/frame00549.jpg",
+                          "./samples/frame00550.jpg",
+                          "./samples/frame00551.jpg",
+                          "./samples/frame00552.jpg",
+                          "./samples/frame00553.jpg",
+                          "./samples/frame00554.jpg",
+                          "./samples/frame00555.jpg",
+                          "./samples/frame00556.jpg",
+                          "./samples/frame00557.jpg",
+                          "./samples/frame00558.jpg",
+                          "./samples/frame00559.jpg",
+                          "./samples/frame00560.jpg",
+                          "./samples/frame00561.jpg",
+                          "./samples/frame00562.jpg",
+                          "./samples/frame00563.jpg",
+                          "./samples/frame00564.jpg",
+                          "./samples/frame00565.jpg",
+                          "./samples/frame00566.jpg",
+                          "./samples/frame00567.jpg",
+                          "./samples/frame00568.jpg",
+                          "./samples/frame00569.jpg",
+                          "./samples/frame00570.jpg",
+                          "./samples/frame00571.jpg",
+                          "./samples/frame00572.jpg",
+                          "./samples/frame00573.jpg",
+                          "./samples/frame00574.jpg",
+                          "./samples/frame00575.jpg",
+                          "./samples/frame00576.jpg",
+                          "./samples/frame00577.jpg",
+                          "./samples/frame00578.jpg",
+                          "./samples/frame00579.jpg",
+                          "./samples/frame00580.jpg",
+                          "./samples/frame00581.jpg",
+                          "./samples/frame00582.jpg",
+                          "./samples/frame00583.jpg",
+                          "./samples/frame00584.jpg",
+                          "./samples/frame00585.jpg",
+                          "./samples/frame00586.jpg",
+                          "./samples/frame00587.jpg",
+                          "./samples/frame00588.jpg",
+                          "./samples/frame00589.jpg",
+                          "./samples/frame00590.jpg",
+                          "./samples/frame00591.jpg",
+                          "./samples/frame00592.jpg",
+                          "./samples/frame00593.jpg",
+                          "./samples/frame00594.jpg",
+                          "./samples/frame00595.jpg",
+                          "./samples/frame00596.jpg",
+                          "./samples/frame00597.jpg",
+                          "./samples/frame00598.jpg",
+                          "./samples/frame00599.jpg",
+                          "./samples/frame00600.jpg",
+                          "./samples/frame00601.jpg",
+                          "./samples/frame00602.jpg",
+                          "./samples/frame00603.jpg",
+                          "./samples/frame00604.jpg",
+                          "./samples/frame00605.jpg",
+                          "./samples/frame00606.jpg",
+                          "./samples/frame00607.jpg",
+                          "./samples/frame00608.jpg",
+                          "./samples/frame00609.jpg",
+                          "./samples/frame00610.jpg",
+                          "./samples/frame00611.jpg",
+                          "./samples/frame00612.jpg",
+                          "./samples/frame00613.jpg",
+                          "./samples/frame00614.jpg",
+                          "./samples/frame00615.jpg",
+                          "./samples/frame00616.jpg",
+                          "./samples/frame00617.jpg",
+                          "./samples/frame00618.jpg",
+                          "./samples/frame00619.jpg",
+                          "./samples/frame00620.jpg",
+                          "./samples/frame00621.jpg",
+                          "./samples/frame00622.jpg",
+                          "./samples/frame00623.jpg",
+                          "./samples/frame00624.jpg",
+                          "./samples/frame00625.jpg",
+                          "./samples/frame00626.jpg",
+                          "./samples/frame00627.jpg",
+                          "./samples/frame00628.jpg",
+                          "./samples/frame00629.jpg",
+                          "./samples/frame00630.jpg",
+                          "./samples/frame00631.jpg",
+                          "./samples/frame00632.jpg",
+                          "./samples/frame00633.jpg",
+                          "./samples/frame00634.jpg",
+                          "./samples/frame00635.jpg",
+                          "./samples/frame00636.jpg",
+                          "./samples/frame00637.jpg",
+                          "./samples/frame00638.jpg",
+                          "./samples/frame00639.jpg",
+                          "./samples/frame00640.jpg",
+                          "./samples/frame00641.jpg",
+                          "./samples/frame00642.jpg",
+                          "./samples/frame00643.jpg",
+                          "./samples/frame00644.jpg",
+                          "./samples/frame00645.jpg",
+                          "./samples/frame00646.jpg",
+                          "./samples/frame00647.jpg",
+                          "./samples/frame00648.jpg",
+                          "./samples/frame00649.jpg",
+                          "./samples/frame00650.jpg",
+                          "./samples/frame00651.jpg",
+                          "./samples/frame00652.jpg",
+                          "./samples/frame00653.jpg",
+                          "./samples/frame00654.jpg",
+                          "./samples/frame00655.jpg",
+                          "./samples/frame00656.jpg",
+                          "./samples/frame00657.jpg",
+                          "./samples/frame00658.jpg",
+                          "./samples/frame00659.jpg",
+                          "./samples/frame00660.jpg",
+                          "./samples/frame00661.jpg",
+                          "./samples/frame00662.jpg",
+                          "./samples/frame00663.jpg",
+                          "./samples/frame00664.jpg",
+                          "./samples/frame00665.jpg",
+                          "./samples/frame00666.jpg",
+                          "./samples/frame00667.jpg",
+                          "./samples/frame00668.jpg",
+                          "./samples/frame00669.jpg",
+                          "./samples/frame00670.jpg",
+                          "./samples/frame00671.jpg",
+                          "./samples/frame00672.jpg",
+                          "./samples/frame00673.jpg",
+                          "./samples/frame00674.jpg",
+                          "./samples/frame00675.jpg",
+                          "./samples/frame00676.jpg",
+                          "./samples/frame00677.jpg",
+                          "./samples/frame00678.jpg",
+                          "./samples/frame00679.jpg"
+                      ])
 
     if 'all' == activity or 'video' == activity:
         print("Process video file {}".format(options.video_input))

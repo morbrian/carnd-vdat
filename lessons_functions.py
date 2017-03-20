@@ -330,7 +330,11 @@ def nonoverlapping_bboxes(labels):
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
         # Define a bounding box based on min/max x and y
-        bboxes.append(((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy))))
+        match_box = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        width = match_box[1][0] - match_box[0][0]
+        height = match_box[1][1] - match_box[0][1]
+        if width > 0 and height > 0:
+            bboxes.append(match_box)
 
     # Return the image
     return bboxes
