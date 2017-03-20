@@ -36,9 +36,9 @@ Next is a sample **not car** image:
  
 ![notcar_sample][notcar_sample]
 
-We leveraged version of the [extract_features](./lessons_functions.py) function from the lessons, modified
+We leveraged the [extract_features](./lessons_functions.py) function from the lessons, modified it
 to support additional visualization options.  Our [prepare_classifier](./vdat-pipeline.py) function is
-configured to use the best parameters we discovered by default.
+configured to use the best parameters we discovered.
 
 Below we use colorspace `LUV`, `orientations=9`, `pix_per_cell=8`, `cells_per_block=2`, `hog_channel=ALL`,
 to generate the HOG visualizations, and the plot at the far right includes the color and spatial bins.
@@ -55,9 +55,11 @@ to generate the HOG visualizations, and the plot at the far right includes the c
 **2. Explain how you settled on your final choice of HOG parameters.**
 
 We tried various values for these parameters, and used the `accuracy_score` prediciton on the classifier
-to decide if a particular value was improving our results. We found the `LUV` color space to work best.
-We also chose to include `ALL` hog channels, and included both color and spatial histograms as part of
-our features array.
+to decide if a particular value was improving our results. 
+
+We explored various options, and `LUV` was always best for color and the accuracy score improved by over 
+a percentage point when using `ALL` hog channels instead of just one of them. Attempting to use
+more orientations than `9` resulted in worse accuracy.
 
 **3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).**
 
@@ -69,7 +71,7 @@ from either camera angle, which seemed to help match the white car in the video 
 We split the data into training and testing sets, and during development we monitored the accuracy score
 on predictions made by the classifier to decide whether it needed additional tuning.
 
-We consistently found we could easily do better than 99% accuracy, but due to the high number of samples evaluated
+We consistently found we could easily do much better than 99% accuracy, but due to the high number of samples evaluated
 during the sliding window search at various scales, the fraction of a percent errors still showed up frequently during
 video processing.
 
@@ -80,8 +82,11 @@ video processing.
 
 The [find_cars](./lessons_functions.py) function performs a sliding window search on an image. It uses
 and overlapping grid approach to partition the larger image into smaller overlapping images which can be
-fed to the classifier to decide if a vehicle is present. For each sub-partition of the grid where a vehicle
-is found, the bounding box corners of the partition are stored.
+fed to the classifier to decide if a vehicle is present.
+
+We used a `cells_per_step=1` because it helped match the vehicles more often, while higher values resulte in faster
+processing but more failed matches. We chose [three scales](./vdat-pipeline.py) (0.8, 1.2, 1.8) across the search
+area. This helped match vehicles independent of their distance from the camera.
 
 The grid itself covers only the bottom portion of the image where vehicles are likely to appear. The image
 below shows an example of how the overlapping grid appears.
@@ -98,6 +103,8 @@ column and the associated bounding boxes are excluded in the final **Fused** ima
 
 ![search_sequence1][search_sequence1]
 ![search_sequence2][search_sequence2]
+![search_sequence3][search_sequence3]
+![search_sequence4][search_sequence4]
 
 ---
 ### Video Implementation
@@ -112,7 +119,7 @@ We used the processing framework proposed in the lesson to process the video, an
 some additional processing to reduce false postitives and to strengthen matches on the vehicles.
 
 The highlevel process applied to each frame is outlined in [apply_pipeline](./vdat-pipeline.py), 
-and we provide some additional detail below to describe what this does.
+and we provide additional detail below to describe how this process works.
 
 1. Identify raw bounding boxes
 
@@ -130,6 +137,10 @@ and we provide some additional detail below to describe what this does.
     The historic heatmap is fused into several new bounding boxes using
     a higher threshold than was used on the single frame fusion. This resulting bounding box
     is what we use to annotate vehicle locations in the image frame.
+
+4. Draw fused bounding boxes
+
+    Finally the fused bounding boxes are drawn on the image frame.
     
 ---
 ### Discussion
@@ -180,6 +191,8 @@ remark for each item to discuss how our solution might fail or could be improved
 [notcar2_sequence]: ./output_folder/notcar-1-hog-sequence.jpg
 [notcar2f_sequence]: ./output_folder/notcar-1-flip-hog-sequence.jpg
 [search_grid]: ./output_folder/search_grid.jpg
-[search_sequence1]: ./output_folder/search_sequence_frame00309.jpg
-[search_sequence2]: ./output_folder/search_sequence_frame00310.jpg 
+[search_sequence1]: ./output_folder/search_sequence_frame00477.jpg
+[search_sequence2]: ./output_folder/search_sequence_frame00478.jpg 
+[search_sequence3]: ./output_folder/search_sequence_frame00479.jpg 
+[search_sequence4]: ./output_folder/search_sequence_frame00480.jpg 
 [project_video]: ./output_folder/vdat_project_video.mp4
