@@ -100,7 +100,7 @@ def bin_spatial(img, size=(32, 32)):
 
 # Define a function to compute color histogram features
 # NEED TO CHANGE bins_range if reading .png files with mpimg!
-def color_hist(img, nbins=32, bins_range=(0, 256)):
+def color_hist(img, nbins=32, bins_range=(0, 255)):
     # Compute the histogram of the color channels separately
     channel1_hist = np.histogram(img[:, :, 0], bins=nbins, range=bins_range)
     channel2_hist = np.histogram(img[:, :, 1], bins=nbins, range=bins_range)
@@ -237,11 +237,11 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
 
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1,
+def find_cars(img, classifier, ystart=400, ystop=704, xstart=0, xstop=1279, scale=1,
               orient=9, pix_per_cell=4, cell_per_block=2, cells_per_step=2,
               spatial_size=(32, 32), hist_bins=32, grid=False):
 
-    img_tosearch = img[ystart:ystop, :, :]
+    img_tosearch = img[ystart:ystop, xstart:xstop, :]
     ctrans_tosearch = cv2.cvtColor(img_tosearch, cv2.COLOR_RGB2LUV)
     if scale != 1:
         imshape = ctrans_tosearch.shape
@@ -257,7 +257,7 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1,
     nfeat_per_block = orient*cell_per_block**2
 
     # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
-    window = 64
+    window = pix_per_cell * 8
     nblocks_per_window = (window // pix_per_cell)-1
     nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
     nysteps = (nyblocks - nblocks_per_window) // cells_per_step
@@ -289,15 +289,16 @@ def find_cars(img, svc, X_scaler, ystart=400, ystop=704, scale=1,
             hist_features = color_hist(subimg, nbins=hist_bins)
 
             # Scale features and make a prediction
-            test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
-            test_prediction = svc.predict(test_features)
+            test_features = np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1)
+            test_prediction = classifier.predict(test_features)
 
-            if test_prediction == 1 and svc.decision_function(test_features) > 0.4 or grid is True:
+            if test_prediction == 1 or grid is True:
+            # if test_prediction == 1 and classifier.decision_function(test_features) > 0.3 or grid is True:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
-                bboxes.append(((xbox_left, ytop_draw+ystart),
-                              (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
+                bboxes.append(((xbox_left+xstart, ytop_draw+ystart),
+                              (xbox_left+win_draw+xstart, ytop_draw+win_draw+ystart)))
 
     return bboxes
 
@@ -331,12 +332,12 @@ def nonoverlapping_bboxes(labels):
         nonzerox = np.array(nonzero[1])
         # Define a bounding box based on min/max x and y
         match_box = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
-        # width = match_box[1][0] - match_box[0][0]
-        # height = match_box[1][1] - match_box[0][1]
-        # if match_box[1][0] > 570 and width > 64 and height > 64:
-        #     bboxes.append(match_box)
-        # elif match_box[1][0] <= 570:
-        bboxes.append(match_box)
+        width = match_box[1][0] - match_box[0][0]
+        height = match_box[1][1] - match_box[0][1]
+        if match_box[1][0] > 570 and width > 64 and height > 64:
+            bboxes.append(match_box)
+        elif match_box[1][0] <= 570:
+            bboxes.append(match_box)
 
     # Return the image
     return bboxes
@@ -349,6 +350,16 @@ def draw_bboxes(img, bboxes, color=(0, 0, 255), thick=4):
         cv2.rectangle(img, bbox[0], bbox[1], color, thick)
     # Return the image
     return img
+
+
+def extract_and_save_blocks(image, bboxes, output_folder):
+    counter = 0
+    for bbox in bboxes:
+        file = '/'.join([output_folder, "block{:05d}.jpg".format(counter)])
+        print(bbox)
+        block = image[bbox[0][1]:bbox[1][1], bbox[0][0]:bbox[1][0], :]
+        cv2.imwrite(file, cv2.cvtColor(cv2.resize(block, (64, 64)), cv2.COLOR_BGR2RGB))
+        counter += 1
 
 
 def produce_heatmap(image, raw_bboxes, threshold=1):

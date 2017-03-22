@@ -13,6 +13,8 @@ import os.path as path
 import imageio
 imageio.plugins.ffmpeg.download()
 from moviepy.editor import VideoFileClip
+from sklearn.pipeline import Pipeline
+from sklearn.tree import ExtraTreeClassifier
 
 
 class VehicleDetectionPipeline:
@@ -25,8 +27,7 @@ class VehicleDetectionPipeline:
     cars = None  # list of cars sample data to train with
     notcars = None  # list of notcars sample data to train with
     output_folder = None  # output folder for any data generated
-    svc = None  # classifier
-    scaler = None  # used for scaling feature vectors
+    classifier = None  # classifier
     raw_bboxes = None  # all matching bboxes at any scale, includes overlapping boxes
     frame_heatmap = None  # heatmap for single frame
     historic_heatmap = None  # heatmap for combined history of frames
@@ -42,19 +43,20 @@ class VehicleDetectionPipeline:
     orient = 9  # number of orientation bins (9 was consistently the best choice)
     pix_per_cell = 8  # number of pixels in height/width to size each cell square
     cell_per_block = 2  # number of cells in a block
-    cells_per_step = 1  # number of cells to move search window in each step
+    cells_per_step = 2  # number of cells to move search window in each step
     hist_bins = 32  # number of histogram bins when extracting features
     spatial_size = (32, 32)  # size of spatial window feature
     color_space = 'LUV'  # color space to use for feature extraction (LUV was consistently the best choice)
     ystart = 390  # where search windows should start
     ystop = 670  # where search windows should stop
-    window_scales = [0.8, 1.0, 1.2, 1.5]  # list of scales to use for window search
+    xstart = 0
+    xstop = 1279
+    window_scales = [0.8, 1.2, 1.8]  # list of scales to use for window search
     bbox_history = []  # history of bounding boxes identifying probably object detections
     bbox_history_limit = 10  # number of frame results to remember in history
     heatmap_frame_threshold = 1  # heat detection threshold in frame when deciding to include a box
     heatmap_historic_threshold = 8  # heat detection threshold combined over the history for box inclusion decision
     classifier_file = None
-    scaler_file = None
     save_preview = True  # save all annotated video frames while processing
 
     def __init__(self, cars, notcars, output_folder, save_frame_range=None):
@@ -70,7 +72,6 @@ class VehicleDetectionPipeline:
         self.save_frame_range = save_frame_range
         self.output_folder = output_folder
         self.classifier_file = '/'.join([output_folder, 'classifier.pkl'])
-        self.scaler_file = '/'.join([output_folder, 'scaler.pkl'])
 
     def prepare_classifier(self, sample_count=5, test=False):
         """
@@ -81,11 +82,9 @@ class VehicleDetectionPipeline:
         import pickle
         if path.exists(self.classifier_file):
             with open(self.classifier_file, 'rb') as fid:
-                self.svc = pickle.load(fid)
-            with open(self.scaler_file, 'rb') as fid:
-                self.scaler = pickle.load(fid)
+                self.classifier = pickle.load(fid)
 
-            print("loaded classifer and scaler from: {} and {}".format(self.classifier_file, self.scaler_file))
+            print("loaded classifer and scaler from: {}".format(self.classifier_file))
             return
 
         t = time.time()
@@ -105,10 +104,10 @@ class VehicleDetectionPipeline:
         # Create an array stack of feature vectors
         X = np.vstack((car_features, notcar_features)).astype(np.float64)
 
-        # Fit a per-column scalerj
-        X_scaler = StandardScaler().fit(X)
-        # Apply the scaler to X
-        scaled_X = X_scaler.transform(X)
+        # # Fit a per-column scalerj
+        # X_scaler = StandardScaler().fit(X)
+        # # Apply the scaler to X
+        # scaled_X = X_scaler.transform(X)
 
         # Define the labels vector
         y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
@@ -117,33 +116,32 @@ class VehicleDetectionPipeline:
         rand_state = np.random.randint(0, 100)
         if test is True:
             X_train, X_test, y_train, y_test = train_test_split(
-                scaled_X, y, test_size=0.05, random_state=rand_state)
+                X, y, test_size=0.05, random_state=rand_state)
         else:
-            X_train = scaled_X
+            X_train = X
             y_train = y
 
-        # Use a linear SVC
-        svc = LinearSVC(C=4.0, max_iter=2000)
+        # create classifier pipeline
+        classifier = Pipeline([('norm', StandardScaler()),
+                               ('etc', ExtraTreeClassifier()),
+                               ('svc', LinearSVC())])
+
         # Check the training time for the SVC
         print("Start training on {} training samples".format(len(X_train)))
         t = time.time()
-        svc.fit(X_train, y_train)
+        classifier.fit(X_train, y_train)
         print(round(time.time() - t, 2), 'Seconds to train SVC...')
 
         if test is True:
             # Check the score of the SVC
-            print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+            print('Test Accuracy of SVC = ', round(classifier.score(X_test, y_test), 4))
 
-        self.svc = svc
-        self.scaler = X_scaler
+        self.classifier = classifier
 
         with open(self.classifier_file, 'wb') as f:
-            pickle.dump(svc, f)
+            pickle.dump(classifier, f)
 
-        with open(self.scaler_file, 'wb') as f:
-            pickle.dump(X_scaler, f)
-
-        print("saved classifer and scaler to: {} and {}".format(self.classifier_file, self.scaler_file))
+        print("saved classifer and scaler to: {}".format(self.classifier_file))
 
     def identify_raw_bboxes(self, image, grid=False):
         """
@@ -154,8 +152,8 @@ class VehicleDetectionPipeline:
         """
         bboxes = []
         for scale in self.window_scales:
-            bboxes.extend(lf.find_cars(image, self.svc, self.scaler,
-                                       ystart=self.ystart, ystop=self.ystop, scale=scale,
+            bboxes.extend(lf.find_cars(image, self.classifier,
+                                       ystart=self.ystart, ystop=self.ystop, xstart=self.xstart, xstop=self.xstop, scale=scale,
                                        orient=self.orient, pix_per_cell=self.pix_per_cell, cells_per_step=self.cells_per_step,
                                        cell_per_block=self.cell_per_block, spatial_size=self.spatial_size,
                                        hist_bins=self.hist_bins, grid=grid))
@@ -163,7 +161,7 @@ class VehicleDetectionPipeline:
         # temporary store in raw_bboxes to prepare for additional processing
         self.raw_bboxes = bboxes
 
-        # generate single frame heatmap and fused boxes
+        # # generate single frame heatmap and fused boxes
         self.generate_frame_heatmap(image)
         frame_fused = lf.fuse_bboxes(self.frame_heatmap)
 
@@ -246,11 +244,13 @@ class VehicleDetectionPipeline:
         if self.save_preview is True:
             frame_output = '/'.join([self.output_folder, "preview{:05d}.jpg".format(self.frame_counter)])
             cv2.imwrite(frame_output, cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            render_search_sequence(image, self, "{:05d}.jpg".format(self.frame_counter))
 
         return image
 
     def buffering(self):
         return len(self.bbox_history) < self.bbox_history_limit - 1
+
 
 def load_training_data(path_patterns):
     """
@@ -289,45 +289,52 @@ def demo_pipeline(pipeline, sample_images):
         else:
             image = mpimg.imread(sample_image)
 
-        # show the search grid, setting grid=True returns every bbox regardless of matching
-        # pipeline.identify_raw_bboxes(image, grid=True)
-        # pipeline.bbox_history = []
-        # grid_image = lf.draw_bboxes(np.copy(image), pipeline.raw_bboxes)
-        # grid_filename = '/'.join([pipeline.output_folder, "search_grid_{}".format(short_name)])
-        # mpimg.imsave(grid_filename, grid_image)
-        # print("saved to: {}".format(grid_filename))
-
         # get overlapping bboxes
         pipeline.identify_raw_bboxes(image)
-        raw_bbox_image = lf.draw_bboxes(np.copy(image), pipeline.raw_bboxes)
 
         # pipeline.generate_frame_heatmap(image)
         pipeline.generate_historic_heatmap(image)
         pipeline.identify_fused_bboxes()
-        fused_image = lf.draw_bboxes(np.copy(image), pipeline.fused_bboxes, thick=6)
 
-        fig = plt.figure()
-        subplot = plt.subplot(141)
-        subplot.axis('off')
-        plt.imshow(raw_bbox_image)
-        plt.title('Matches')
-        subplot = plt.subplot(142)
-        subplot.axis('off')
-        plt.imshow(pipeline.frame_heatmap, cmap='hot')
-        plt.title('Frame Heat')
-        subplot = plt.subplot(143)
-        subplot.axis('off')
-        plt.imshow(pipeline.historic_heatmap, cmap='hot')
-        plt.title('Historic Heat')
-        subplot = plt.subplot(144)
-        subplot.axis('off')
-        plt.imshow(fused_image)
-        plt.title('Fused')
-        fig.tight_layout()
-        search_sequence_filename = '/'.join([pipeline.output_folder, "search_sequence_{}".format(short_name)])
-        plt.savefig(search_sequence_filename, bbox_inches='tight', dpi=150)
-        plt.close(fig)
-        print("saved to: {}".format(search_sequence_filename))
+        render_search_sequence(image, pipeline, short_name)
+
+
+def render_search_sequence(image, pipeline, suffix):
+    # # show the search grid, setting grid=True returns every bbox regardless of matching
+    # pipeline.identify_raw_bboxes(image, grid=True)
+    # # pipeline.bbox_history = []
+    # lf.extract_and_save_blocks(image, pipeline.raw_bboxes, pipeline.output_folder)
+    #
+    # grid_image = lf.draw_bboxes(np.copy(image), pipeline.raw_bboxes)
+    #
+    # grid_filename = '/'.join([pipeline.output_folder, "search_grid_{}".format(short_name)])
+    # mpimg.imsave(grid_filename, grid_image)
+    # print("saved to: {}".format(grid_filename))
+
+    raw_bbox_image = lf.draw_bboxes(np.copy(image), pipeline.raw_bboxes)
+    fused_image = lf.draw_bboxes(np.copy(image), pipeline.fused_bboxes, thick=6)
+
+    fig = plt.figure()
+    subplot = plt.subplot(141)
+    subplot.axis('off')
+    plt.imshow(raw_bbox_image)
+    plt.title('Matches')
+    subplot = plt.subplot(142)
+    subplot.axis('off')
+    plt.imshow(pipeline.frame_heatmap, cmap='hot')
+    plt.title('Frame Heat')
+    subplot = plt.subplot(143)
+    subplot.axis('off')
+    plt.imshow(pipeline.historic_heatmap, cmap='hot')
+    plt.title('Historic Heat')
+    subplot = plt.subplot(144)
+    subplot.axis('off')
+    plt.imshow(fused_image)
+    plt.title('Fused')
+    fig.tight_layout()
+    search_sequence_filename = '/'.join([pipeline.output_folder, "search_sequence_{}".format(suffix)])
+    plt.savefig(search_sequence_filename, bbox_inches='tight', dpi=150)
+    plt.close(fig)
 
 
 def process_video(video_file, pipeline):
@@ -352,12 +359,12 @@ def main():
     import optparse
 
     parser = optparse.OptionParser()
-    parser.add_option('-a', '--activity', dest='activity', default='demo',
+    parser.add_option('-a', '--activity', dest='activity', default='video',
                       help="activity to perform [demo, video, all], to create demo images or process video or both")
     parser.add_option('-v', '--video_input', dest='video_input', default='./project_video.mp4',
                       help="video file to process.")
     parser.add_option('-t', '--training_patterns', dest='training_patterns',
-                      default=['./training/large/*.png', './training/small/*.jpeg'],
+                      default=['./training/combine_large/*.png'],
                       help="path to folder of car and non-car images to use.")
     parser.add_option('-o', '--output_folder', dest='output_folder', default='./output_folder',
                       help="output folder to hold examples of images during process.")
@@ -375,7 +382,9 @@ def main():
 
     if 'all' == activity or 'demo' == activity:
         print("Demo pipeline components on sample images")
-        demo_pipeline(pipeline, ["./samples/bbox-example-image.jpg"])
+        demo_pipeline(pipeline, [
+            "./samples/frame00650.jpg"
+        ])
 
     if 'all' == activity or 'video' == activity:
         print("Process video file {}".format(options.video_input))
