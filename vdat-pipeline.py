@@ -43,15 +43,30 @@ class VehicleDetectionPipeline:
     orient = 9  # number of orientation bins (9 was consistently the best choice)
     pix_per_cell = 8  # number of pixels in height/width to size each cell square
     cell_per_block = 2  # number of cells in a block
-    cells_per_step = 2  # number of cells to move search window in each step
+    cells_per_step = [1, 2, 2]  # number of cells to move search window in each step
     hist_bins = 32  # number of histogram bins when extracting features
     spatial_size = (32, 32)  # size of spatial window feature
     color_space = 'LUV'  # color space to use for feature extraction (LUV was consistently the best choice)
-    ystart = 390  # where search windows should start
-    ystop = 670  # where search windows should stop
-    xstart = 0
-    xstop = 1279
-    window_scales = [0.8, 1.2, 1.8]  # list of scales to use for window search
+
+    # ystart = [390, 440, 500]  # where search windows should start
+    # ystop = [460, 520, 670]  # where search windows should stop
+    # xstart = [150, 100, 50]
+    # xstop = [1130, 1280, 1230]
+    # window_scales = [0.9, 1.2, 1.8]  # list of scales to use for window search
+
+    # ystart = [390, 390, 390]  # where search windows should start
+    # ystop = [670, 670, 670]  # where search windows should stop
+    # xstart = [0, 0, 0]
+    # xstop = [1279, 1279, 1279]
+    # window_scales = [0.9, 1.2, 1.8]  # list of scales to use for window search
+
+    ystart = [390, 370, 370]  # where search windows should start
+    ystop = [470, 540, 670]  # where search windows should stop
+    xstart = [200, 0, 0]
+    xstop = [1080, 1279, 1279]
+    window_scales = [0.9, 1.2, 1.8]  # list of scales to use for window search
+
+
     bbox_history = []  # history of bounding boxes identifying probably object detections
     bbox_history_limit = 10  # number of frame results to remember in history
     heatmap_frame_threshold = 1  # heat detection threshold in frame when deciding to include a box
@@ -151,10 +166,11 @@ class VehicleDetectionPipeline:
         :param grid: True to include all boxes regardless of classifier prediction (useful for documentation)
         """
         bboxes = []
-        for scale in self.window_scales:
+        for scale, cells_per_step, ystart, ystop, xstart, xstop in zip(self.window_scales, self.cells_per_step,
+                                                                       self.ystart, self.ystop, self.xstart, self.xstop):
             bboxes.extend(lf.find_cars(image, self.classifier,
-                                       ystart=self.ystart, ystop=self.ystop, xstart=self.xstart, xstop=self.xstop, scale=scale,
-                                       orient=self.orient, pix_per_cell=self.pix_per_cell, cells_per_step=self.cells_per_step,
+                                       ystart=int(ystart), ystop=int(ystop), xstart=int(xstart), xstop=int(xstop), scale=scale,
+                                       orient=self.orient, pix_per_cell=self.pix_per_cell, cells_per_step=cells_per_step,
                                        cell_per_block=self.cell_per_block, spatial_size=self.spatial_size,
                                        hist_bins=self.hist_bins, grid=grid))
 
@@ -383,7 +399,25 @@ def main():
     if 'all' == activity or 'demo' == activity:
         print("Demo pipeline components on sample images")
         demo_pipeline(pipeline, [
-            "./samples/frame00650.jpg"
+            "./samples/frame00720.jpg",
+            "./samples/frame00721.jpg",
+            "./samples/frame00722.jpg",
+            "./samples/frame00723.jpg",
+            "./samples/frame00724.jpg",
+            "./samples/frame00725.jpg",
+            "./samples/frame00726.jpg",
+            "./samples/frame00727.jpg",
+            "./samples/frame00728.jpg",
+            "./samples/frame00729.jpg",
+            "./samples/frame00730.jpg",
+            "./samples/frame00731.jpg",
+            "./samples/frame00731.jpg",
+            "./samples/frame00734.jpg",
+            "./samples/frame00735.jpg",
+            "./samples/frame00736.jpg",
+            "./samples/frame00737.jpg",
+            "./samples/frame00738.jpg",
+            "./samples/frame00739.jpg",
         ])
 
     if 'all' == activity or 'video' == activity:

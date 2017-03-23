@@ -293,7 +293,6 @@ def find_cars(img, classifier, ystart=400, ystop=704, xstart=0, xstop=1279, scal
             test_prediction = classifier.predict(test_features)
 
             if test_prediction == 1 or grid is True:
-            # if test_prediction == 1 and classifier.decision_function(test_features) > 0.3 or grid is True:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
@@ -332,12 +331,12 @@ def nonoverlapping_bboxes(labels):
         nonzerox = np.array(nonzero[1])
         # Define a bounding box based on min/max x and y
         match_box = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
-        width = match_box[1][0] - match_box[0][0]
-        height = match_box[1][1] - match_box[0][1]
-        if match_box[1][0] > 570 and width > 64 and height > 64:
-            bboxes.append(match_box)
-        elif match_box[1][0] <= 570:
-            bboxes.append(match_box)
+        # width = match_box[1][0] - match_box[0][0]
+        # height = match_box[1][1] - match_box[0][1]
+        # if match_box[1][1] > 620 and width > 64 and height > 64:
+        #     bboxes.append(match_box)
+        # elif match_box[1][0] <= 570:
+        bboxes.append(match_box)
 
     # Return the image
     return bboxes
