@@ -48,18 +48,6 @@ class VehicleDetectionPipeline:
     spatial_size = (32, 32)  # size of spatial window feature
     color_space = 'LUV'  # color space to use for feature extraction (LUV was consistently the best choice)
 
-    # ystart = [390, 440, 500]  # where search windows should start
-    # ystop = [460, 520, 670]  # where search windows should stop
-    # xstart = [150, 100, 50]
-    # xstop = [1130, 1280, 1230]
-    # window_scales = [0.9, 1.2, 1.8]  # list of scales to use for window search
-
-    # ystart = [390, 390, 390]  # where search windows should start
-    # ystop = [670, 670, 670]  # where search windows should stop
-    # xstart = [0, 0, 0]
-    # xstop = [1279, 1279, 1279]
-    # window_scales = [0.9, 1.2, 1.8]  # list of scales to use for window search
-
     ystart = [390, 370, 370]  # where search windows should start
     ystop = [470, 540, 670]  # where search windows should stop
     xstart = [200, 0, 0]

@@ -65,6 +65,9 @@ more orientations than `9` resulted in worse accuracy.
 
 We train the classifier using an ` LinearSVC` classifier from SciKitLearn in [prepare_classifier](./vdat-pipeline.py).
 
+We sought out suggestions from Aaron, our Udacity mentor, who recommended including teh sklearn `ExtraTreeClassifier`
+in our processing pipeline, and also suggested using the sklearn `Pipeline` object to bundle the classification process.
+
 To provide a larger collection of samples, we also flipped the images left-right so that we would have each image
 from either camera angle, which seemed to help match the white car in the video a little more often.
 
@@ -75,6 +78,10 @@ We consistently found we could easily do much better than 99% accuracy, but due 
 during the sliding window search at various scales, the fraction of a percent errors still showed up frequently during
 video processing.
 
+For a period of time we had unknowingly had corrupted our data set by including vehicle images in our non-vehicle
+dataset, which caused a period of confusion due to poor video results, but we still were seeing 99-100% accuracy during
+training, which still seems surprising.
+
 ---
 ### Sliding Window Search
 
@@ -84,14 +91,17 @@ The [find_cars](./lessons_functions.py) function performs a sliding window searc
 and overlapping grid approach to partition the larger image into smaller overlapping images which can be
 fed to the classifier to decide if a vehicle is present.
 
-We used a `cells_per_step=1` because it helped match the vehicles more often, while higher values resulte in faster
-processing but more failed matches. We chose [three scales](./vdat-pipeline.py) (0.8, 1.2, 1.8) across the search
-area. This helped match vehicles independent of their distance from the camera.
+ We chose [three scales](./vdat-pipeline.py) (0.9, 1.2, 1.8), and for each scale we supply a different
+ `window_scale`, `cells_per_step` and start/stop pixels along x and y. 
+ 
+Changing scales helps matching the vehicles at further distances, and we use `cells_per_step=1` at the smallest
+scale where the extra granularity is useful, and drop to `cells_per_step=2` at the larger scales.
 
-The grid itself covers only the bottom portion of the image where vehicles are likely to appear. The image
-below shows an example of how the overlapping grid appears.
+Each of the next three images shows our search grid for each of the three scales we configured.
 
-![search_grid][search_grid]
+![grid_scale09][grid_scale09]
+![grid_scale12][grid_scale12]
+![grid_scale18][grid_scale18]
 
 **2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?**
 
@@ -99,7 +109,9 @@ Below are two consecutive frame images visualizing how the pipeline identifies b
 the vehicles discovered in the image.
 
 Note how the **Frame Heat** column shows more matches, but these are weeded out as noise in the **Historic Heat**
-column and the associated bounding boxes are excluded in the final **Fused** image.
+column and the associated bounding boxes are excluded in the final **Fused** image. We chose this specific sequence
+because it demonstrates a problem area where the shadowy area is filtered out in early frames, but then manages to
+to exceed the threshold briefly, slipping into the fused frame before being filtered out again.
 
 ![search_sequence1][search_sequence1]
 ![search_sequence2][search_sequence2]
@@ -152,10 +164,10 @@ remark for each item to discuss how our solution might fail or could be improved
 
 1. We initially had trouble matching vehicles consistently even though our classifier had better than 99% accuracy.
 
-    To improve our matching ability, we increased the granularity of the sliding window search (ie. stepped by fewer cells),
-    and we searched at 3 different scales instead of just one scale.
+    To improve our matching ability, we increased the granularity of the sliding window search at smaller scales
+    (ie. stepped by fewer cells), and we searched at 3 different scales instead of just one scale. 
+    And we used different cell steps and start/stop parameters at each scale.
     
-    **Remarks:** This helped get matches but also significantly slowed down our per frame processing.
     
 2. We had lots of false positives and lots of missed matches depending on the frame.
 
@@ -165,14 +177,14 @@ remark for each item to discuss how our solution might fail or could be improved
     in every frame.
     
     **Remarks:** Objects which change position quickly over a few frames will still not be matched very well
-    with this approach because the history does not account for motion or position changes.
+    with this approach because the history does not account for significant motion or position changes.
     
-3. We had a lot of trouble matching the white car and ignoring the left lane line when it is curved.
+3. Our classifier remains somewhat sensitive to shadowy areas on the road.
 
-    We ended up augmenting our training data with flipped versions of every image to help provide examples
-    of vehicles from any angle, and this helped with the white car. The left lane line is still frequently
-    interpreted as a vehicle. We were able to mostly resolve the left lane line issue by tuning our
-    thresholds for both the per-frame boxes and the history bounding boxes.
+    We were seeing high accuracy scores from our classifier on the training data and test data,
+    and although we flipped the images to increase the quantity of data we did not jitter the data
+    in any other way. When multiple light and dark areas of the road are scanned, such as when
+    light is shining through tree banches onto the road, the classifier is less accurate.
     
     **Remarks:** The take away lesson we learned from tuning our classifier was that high accuracy of nearly 100%
     may look good, but the small errors show up way more than expected during frame processing where we are
@@ -190,9 +202,11 @@ remark for each item to discuss how our solution might fail or could be improved
 [notcar1f_sequence]: ./output_folder/notcar-0-flip-hog-sequence.jpg
 [notcar2_sequence]: ./output_folder/notcar-1-hog-sequence.jpg
 [notcar2f_sequence]: ./output_folder/notcar-1-flip-hog-sequence.jpg
-[search_grid]: ./output_folder/search_grid.jpg
-[search_sequence1]: ./output_folder/search_sequence_frame00477.jpg
-[search_sequence2]: ./output_folder/search_sequence_frame00478.jpg 
-[search_sequence3]: ./output_folder/search_sequence_frame00479.jpg 
-[search_sequence4]: ./output_folder/search_sequence_frame00480.jpg 
+[grid_scale09]: ./output_folder/grid_scale09_frame00720.jpg
+[grid_scale12]: ./output_folder/grid_scale12_frame00720.jpg
+[grid_scale18]: ./output_folder/grid_scale18_frame00720.jpg
+[search_sequence1]: ./output_folder/search_sequence_00985.jpg
+[search_sequence2]: ./output_folder/search_sequence_00986.jpg 
+[search_sequence3]: ./output_folder/search_sequence_00987.jpg 
+[search_sequence4]: ./output_folder/search_sequence_00988.jpg 
 [project_video]: ./output_folder/vdat_project_video.mp4
