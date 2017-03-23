@@ -15,11 +15,11 @@ Original rubric at Udacity: [RubricPoints](https://review.udacity.com/#!/rubrics
 
 This file is the writeup.
 
-The [demo_pipeline](./vdat-pipeline.py) function is written to produce most of the sample images
+The [demo_pipeline](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L279) function is written to produce most of the sample images
 in this write up. It calls the same sequence of functions as our video procesing pipeline,
 but exists separately to help generate examples of each step of our process.
 
-The [process_video](./vdat-pipeline.py) function prepares the pipeline object and starts video processing. 
+The [process_video](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L344) function prepares the pipeline object and starts video processing. 
 
 ---
 ### Histogram of Oriented Gradients (HOG)
@@ -36,8 +36,8 @@ Next is a sample **not car** image:
  
 ![notcar_sample][notcar_sample]
 
-We leveraged the [extract_features](./lessons_functions.py) function from the lessons, modified it
-to support additional visualization options.  Our [prepare_classifier](./vdat-pipeline.py) function is
+We leveraged the [extract_features](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/lessons_functions.py#L193) function from the lessons, modified it
+to support additional visualization options.  Our [prepare_classifier](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L79) function is
 configured to use the best parameters we discovered.
 
 Below we use colorspace `LUV`, `orientations=9`, `pix_per_cell=8`, `cells_per_block=2`, `hog_channel=ALL`,
@@ -63,7 +63,7 @@ more orientations than `9` resulted in worse accuracy.
 
 **3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).**
 
-We train the classifier using an ` LinearSVC` classifier from SciKitLearn in [prepare_classifier](./vdat-pipeline.py).
+We train the classifier using an `LinearSVC` classifier from SciKitLearn in [prepare_classifier](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L79).
 
 We sought out suggestions from Aaron, our Udacity mentor, who recommended including teh sklearn `ExtraTreeClassifier`
 in our processing pipeline, and also suggested using the sklearn `Pipeline` object to bundle the classification process.
@@ -87,11 +87,11 @@ training, which still seems surprising.
 
 **1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?**
 
-The [find_cars](./lessons_functions.py) function performs a sliding window search on an image. It uses
+The [find_cars](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/lessons_functions.py#L240) function performs a sliding window search on an image. It uses
 and overlapping grid approach to partition the larger image into smaller overlapping images which can be
 fed to the classifier to decide if a vehicle is present.
 
- We chose [three scales](./vdat-pipeline.py) (0.9, 1.2, 1.8), and for each scale we supply a different
+ We chose [three scales](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L55) (0.9, 1.2, 1.8), and for each scale we supply a different
  `window_scale`, `cells_per_step` and start/stop pixels along x and y. 
  
 Changing scales helps matching the vehicles at further distances, and we use `cells_per_step=1` at the smallest
@@ -130,7 +130,7 @@ Our final video is at [./output_folder/vdat_project_video.mp4](./output_folder/v
 We used the processing framework proposed in the lesson to process the video, and then augmented it with
 some additional processing to reduce false postitives and to strengthen matches on the vehicles.
 
-The highlevel process applied to each frame is outlined in [apply_pipeline](./vdat-pipeline.py), 
+The highlevel process applied to each frame is outlined in [apply_pipeline](https://github.com/morbrian/carnd-vdat/blob/c0a74707077c91a2519474f21a91d0d20bd4783f/vdat-pipeline.py#L213), 
 and we provide additional detail below to describe how this process works.
 
 1. Identify raw bounding boxes
